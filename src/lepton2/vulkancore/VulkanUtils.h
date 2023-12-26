@@ -1,0 +1,56 @@
+#pragma once
+
+// A huge thanks to Alexander Overvoorde, and all of the contributors to github.com/Overv/VulkanTutorial,
+// without whose work this library would not be remotely similar.
+// Their c++ work, from which vulkancore is based, is licensed as CC0 v1.0.
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#include <vulkan/vulkan.h>
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <stdio.h>
+#include <vector>
+
+#define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
+#define EXTDoProxy(name, ...) ((EXTBuildProxyFuncptr(name) == nullptr) ? (VK_ERROR_EXTENSION_NOT_PRESENT) : (EXTBuildProxyFuncptr(name)(__VA_ARGS__)))
+#define EXTDoVoidProxy(name, ...)                \
+    if (EXTBuildProxyFuncptr(name) != nullptr) { \
+        EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
+    }
+
+namespace lepton2::vulkancore {
+
+    class VulkanContext;
+
+    class DeletableVulkanResource {
+    public:
+        virtual void destroy(VulkanContext* ctx) = 0; // Destruction should be idempotent
+    };
+
+    enum ImageLayoutTransitionMode {
+        ILTM_UNDEF_2_XFER_DST,
+        ILTM_XFER_DST_2_FRAG_RO
+    };
+
+    extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
+    extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
+    extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, ImageLayoutTransitionMode iltm);
+    extern void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+    extern void copyBuffer(VulkanContext* ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    extern std::vector<char> readFile(const std::string& filename);
+}
