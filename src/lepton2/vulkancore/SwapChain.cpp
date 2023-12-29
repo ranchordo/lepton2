@@ -90,18 +90,42 @@ void SwapChain::createSwapChain() {
     swapChainExtent = extent;
     // Create image views
     for (size_t i = 0; i < swapChainImages.size(); i++) {
-        swapChainImages[i].imageView = createImageView(ctx, swapChainVkImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-        swapChainImages[i].image = swapChainVkImages[i];
-        swapChainImages[i].imageFormat = swapChainImageFormat;
-        swapChainImages[i].chonklet.chonkus = nullptr;
+        swapChainImages[i] = new VulkanImage();
+        swapChainImages[i]->imageView = createImageView(ctx, swapChainVkImages[i], swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+        swapChainImages[i]->image = swapChainVkImages[i];
+        swapChainImages[i]->do_not_destroy_image = true;
+        swapChainImages[i]->imageFormat = swapChainImageFormat;
+        swapChainImages[i]->chonklet.chonkus = nullptr;
     }
 
-    this->createFramebuffers();
+    // Create default depth image
+    this->defaultDepthImage = new VulkanImage();
+    this->defaultDepthImage->imageFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    createImage(this->ctx, swapChainExtent.width, swapChainExtent.height, defaultDepthImage->imageFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT, defaultDepthImage);
+
+    this->swapChainFramebuffers.resize(this->swapChainImages.size());
+    for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
+        Framebuffer* nfb = new Framebuffer();
+        nfb->addColorImage(this->swapChainImages.at(i));
+        nfb->setDepthImage(defaultDepthImage);
+        // Don't actually build yet, need a renderPass object
+        // But we can still set these up as framebuffer structural references.
+        this->swapChainFramebuffers[i] = nfb;
+    }
 }
 
-void SwapChain::destroy(VulkanContext* ctx) {
-    for (VulkanImage img : this->swapChainImages) {
-        img.destroy(ctx);
+void SwapChain::destroy_back(VulkanContext* ctx) {
+    for (VulkanImage* img : this->swapChainImages) {
+        img->destroy(ctx);
+        delete img;
+    }
+    this->defaultDepthImage->destroy(ctx);
+    delete this->defaultDepthImage;
+    for (Framebuffer* fb : this->swapChainFramebuffers) {
+        fb->destroy(ctx);
+        delete fb;
     }
     vkDestroySwapchainKHR(ctx->device, this->swapChain, nullptr);
 }
@@ -115,10 +139,12 @@ void SwapChain::rebuildSwapChain() {
     }
 
     vkDeviceWaitIdle(ctx->device);
-    this->destroy(this->ctx);
+    this->destroy_back(this->ctx);
     this->createSwapChain();
 }
 
-void SwapChain::createFramebuffers() {
-    throw std::runtime_error("you are an idiot.");
+void SwapChain::createFramebuffers(VkRenderPass renderPass, VulkanImage* depthImage) {
+    for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
+        swapChainFramebuffers.at(i)->buildFramebuffer(renderPass, swapChainExtent.width, swapChainExtent.height);
+    }
 }

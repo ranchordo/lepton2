@@ -24,7 +24,7 @@ namespace lepton2::vulkancore {
         VkDeviceSize allocationSize;
         MemoryChonkletEntry* entry;
         bool is_null() { return (memory == VK_NULL_HANDLE); }
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     };
 
     struct MemoryChonklet: public DeletableVulkanResource {
@@ -32,7 +32,7 @@ namespace lepton2::vulkancore {
         VkDeviceSize offset;
         VkDeviceSize size;
         bool is_null() { return (chonkus == nullptr) || chonkus->is_null(); }
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     };
 
     class VulkanAllocationManager: public DeletableVulkanResource {
@@ -40,7 +40,7 @@ namespace lepton2::vulkancore {
         VulkanAllocationManager(VulkanContext* ctx) { this->ctx = ctx; }
         MemoryChonklet findMemory(VkDeviceSize size, uint32_t memoryTypeIndex);
         void freeChonklet(MemoryChonklet chonklet);
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     private:
         MemoryChonkus buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex);
         MemoryChonkletEntry* findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size);

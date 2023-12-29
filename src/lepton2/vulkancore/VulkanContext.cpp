@@ -288,36 +288,29 @@ void VulkanContext::buildAllCommandPools() {
     }
 }
 
-void VulkanContext::destroy(VulkanContext* ctx) {
+void VulkanContext::destroy_back(VulkanContext* ctx) {
     this->allocManager.destroy(ctx);
     this->swapChain.destroy(ctx);
     if (this->vk_command_pools.normalGraphics != VK_NULL_HANDLE) {
         vkDestroyCommandPool(this->device, vk_command_pools.normalGraphics, nullptr);
-        vk_command_pools.normalGraphics = VK_NULL_HANDLE;
     }
     if (this->vk_command_pools.transientGraphics != VK_NULL_HANDLE) {
         vkDestroyCommandPool(this->device, vk_command_pools.transientGraphics, nullptr);
-        vk_command_pools.transientGraphics = VK_NULL_HANDLE;
     }
     
     if (this->device != VK_NULL_HANDLE) {
         vkDestroyDevice(this->device, nullptr);
-        this->device = VK_NULL_HANDLE;
     }
     if (enable_validation_layers && debugMessenger != VK_NULL_HANDLE) {
         EXTDoVoidProxy(vkDestroyDebugUtilsMessengerEXT, instance, debugMessenger, nullptr);
-        this->debugMessenger = VK_NULL_HANDLE;
     }
     if (this->surface != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(this->instance, surface, nullptr);
-        this->surface = VK_NULL_HANDLE;
     }
     if (this->instance != VK_NULL_HANDLE) {
         vkDestroyInstance(this->instance, nullptr);
-        this->instance = VK_NULL_HANDLE;
     }
     if (this->window != nullptr) {
         glfwDestroyWindow(window);
-        window = nullptr;
     }
 }

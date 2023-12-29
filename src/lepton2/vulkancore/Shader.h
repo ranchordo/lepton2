@@ -7,7 +7,7 @@ namespace lepton2::vulkancore {
     class Shader: public DeletableVulkanResource {
     public:
         Shader(VulkanContext* ctx, const char* shader_name);
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
         VkShaderModule vertexShaderModule;
         VkShaderModule fragmentShaderModule;
     private:

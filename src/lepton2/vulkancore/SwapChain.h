@@ -12,14 +12,14 @@ namespace lepton2::vulkancore {
         SwapChain(VulkanContext* ctx) { this->ctx = ctx; }
         VkSwapchainKHR swapChain;
         VulkanContext* ctx;
-        std::vector<VulkanImage> swapChainImages;
-        std::vector<Framebuffer> swapChainFramebuffers;
+        std::vector<VulkanImage*> swapChainImages;
+        std::vector<Framebuffer*> swapChainFramebuffers;
         VkFormat swapChainImageFormat;
         VkExtent2D swapChainExtent;
-        void destroy(VulkanContext* ctx) override;
+        VulkanImage* defaultDepthImage;
+        void destroy_back(VulkanContext* ctx) override;
         void rebuildSwapChain();
         void createSwapChain();
-    private:
-        void createFramebuffers();
+        void createFramebuffers(VkRenderPass renderPass, VulkanImage* depthImage);
     };
 }

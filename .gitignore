@@ -1,0 +1,5 @@
+build
+shaders_build
+VulkanMain
+.vscode
+something.cpp

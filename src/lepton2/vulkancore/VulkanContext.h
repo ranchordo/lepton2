@@ -60,7 +60,7 @@ namespace lepton2::vulkancore {
         SwapChain swapChain;
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
         SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     private:
         bool enable_validation_layers;
         bool print_debug_info;

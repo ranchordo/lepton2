@@ -31,13 +31,11 @@ Shader::Shader(VulkanContext* ctx, const char* shader_name) {
     this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
 }
 
-void Shader::destroy(VulkanContext* ctx) {
+void Shader::destroy_back(VulkanContext* ctx) {
     if (this->vertexShaderModule != VK_NULL_HANDLE) {
         vkDestroyShaderModule(ctx->device, vertexShaderModule, nullptr);
-        vertexShaderModule = VK_NULL_HANDLE;
     }
     if (this->fragmentShaderModule != VK_NULL_HANDLE) {
         vkDestroyShaderModule(ctx->device, fragmentShaderModule, nullptr);
-        fragmentShaderModule = VK_NULL_HANDLE;
     }
 }

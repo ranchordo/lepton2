@@ -24,6 +24,7 @@ int main() {
     vkctx = new VulkanContext(true, true, appInfo, window);
 
     Shader shader(vkctx, "shader");
+    shader.destroy(vkctx);
 
     vkctx->destroy(vkctx);
     delete vkctx;

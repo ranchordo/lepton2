@@ -7,6 +7,7 @@ namespace lepton2::vulkancore {
     class VulkanContext;
     struct VulkanImage: public DeletableVulkanResource {
         VkImage image = VK_NULL_HANDLE;
+        bool do_not_destroy_image = false;
         VkFormat imageFormat;
         VkImageView imageView = VK_NULL_HANDLE;
         MemoryChonklet chonklet;
@@ -14,7 +15,7 @@ namespace lepton2::vulkancore {
         VulkanImage() {}
         void findMemory(VulkanContext* ctx, VkMemoryPropertyFlags properties);
         void buildImageView(VulkanContext* ctx, VkImageAspectFlags aspectFlags);
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     };
     struct VulkanBuffer: public DeletableVulkanResource {
         VkBuffer buffer;
@@ -22,6 +23,6 @@ namespace lepton2::vulkancore {
         VulkanBuffer(VkBuffer buffer) { this->buffer = buffer; }
         VulkanBuffer() {}
         void findMemory(VulkanContext* ctx, VkMemoryPropertyFlags properties);
-        void destroy(VulkanContext* ctx) override;
+        void destroy_back(VulkanContext* ctx) override;
     };
 }

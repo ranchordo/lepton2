@@ -29,13 +29,27 @@
         EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
     }
 
+#define CHECK_DESTRUCTION(status) { if (this->destroyed) { return status; }}
+#define CHECK_DESTRUCTION_VOID() { if (this->destroyed) { return; }}
+
+// Don't ask.
+#define SEPPUKU() { *(int*)0 = 0; }
+
 namespace lepton2::vulkancore {
 
     class VulkanContext;
+    class VulkanImage;
+    class VulkanBuffer;
 
     class DeletableVulkanResource {
     public:
-        virtual void destroy(VulkanContext* ctx) = 0; // Destruction should be idempotent
+        virtual void destroy_back(VulkanContext* ctx) = 0;
+        void destroy(VulkanContext* ctx) {
+            if (!destroyed) destroy_back(ctx);
+            this->destroyed = true;
+        }
+    protected:
+        bool destroyed = false;
     };
 
     enum ImageLayoutTransitionMode {
@@ -44,8 +58,8 @@ namespace lepton2::vulkancore {
     };
 
     extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VulkanBuffer* buffer);
+    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
     extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
     extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
     extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, ImageLayoutTransitionMode iltm);

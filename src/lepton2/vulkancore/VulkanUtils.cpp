@@ -16,30 +16,19 @@ namespace lepton2::vulkancore {
         throw std::runtime_error("Failed to find suitable memory type.");
     }
 
-    void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+    void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VulkanBuffer* buffer) {
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        if (vkCreateBuffer(ctx->device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        if (vkCreateBuffer(ctx->device, &bufferInfo, nullptr, &buffer->buffer) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create buffer.");
         }
-
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(ctx->device, buffer, &memRequirements);
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(ctx, memRequirements.memoryTypeBits, properties);
-        if (vkAllocateMemory(ctx->device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate vertex buffer memory.");
-        }
-        vkBindBufferMemory(ctx->device, buffer, bufferMemory, 0);
+        buffer->findMemory(ctx, properties);
     }
 
-    void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image) {
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -55,21 +44,13 @@ namespace lepton2::vulkancore {
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imageInfo.flags = 0;
-        if (vkCreateImage(ctx->device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        if (vkCreateImage(ctx->device, &imageInfo, nullptr, &image->image) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create image.");
         }
-        VkMemoryRequirements memRequirements;
-        vkGetImageMemoryRequirements(ctx->device, image, &memRequirements);
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(ctx, memRequirements.memoryTypeBits, properties);
-
-        if (vkAllocateMemory(ctx->device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate image memory.");
-        }
-
-        vkBindImageMemory(ctx->device, image, imageMemory, 0);
+        image->imageFormat = format;
+        image->do_not_destroy_image = false;
+        image->findMemory(ctx, properties);
+        image->buildImageView(ctx, aspectFlags);
     }
 
     VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx) {

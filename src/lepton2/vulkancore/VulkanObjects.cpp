@@ -15,14 +15,12 @@ void VulkanImage::buildImageView(VulkanContext* ctx, VkImageAspectFlags aspectFl
     this->imageView = createImageView(ctx, this->image, this->imageFormat, aspectFlags);
 }
 
-void VulkanImage::destroy(VulkanContext* ctx) {
-    if (this->image != VK_NULL_HANDLE) {
+void VulkanImage::destroy_back(VulkanContext* ctx) {
+    if (!do_not_destroy_image && this->image != VK_NULL_HANDLE) {
         vkDestroyImage(ctx->device, this->image, nullptr);
-        this->image = VK_NULL_HANDLE;
     }
     if (this->imageView != VK_NULL_HANDLE) {
         vkDestroyImageView(ctx->device, this->imageView, nullptr);
-        this->imageView = VK_NULL_HANDLE;
     }
     this->chonklet.destroy(ctx);
 }
@@ -35,10 +33,9 @@ void VulkanBuffer::findMemory(VulkanContext* ctx, VkMemoryPropertyFlags properti
     vkBindBufferMemory(ctx->device, this->buffer, this->chonklet.chonkus->memory, this->chonklet.offset);
 }
 
-void VulkanBuffer::destroy(VulkanContext* ctx) {
+void VulkanBuffer::destroy_back(VulkanContext* ctx) {
     if (this->buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(ctx->device, this->buffer, nullptr);
-        this->buffer = VK_NULL_HANDLE;
     }
     this->chonklet.destroy(ctx);
 }

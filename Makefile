@@ -1,7 +1,7 @@
 CFLAGS = -std=c++17 -O3
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
-SOURCES = $(wildcard *.cpp) $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)
+SOURCES = $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)
 OBJECTS = $(subst src,build,$(SOURCES:.cpp=.o))
 
 .PHONY: test clean
