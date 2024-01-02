@@ -58,8 +58,11 @@ namespace lepton2::vulkancore {
     };
 
     extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VulkanBuffer* buffer);
-    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
+    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage,
+        VkMemoryPropertyFlags properties, VulkanBuffer* buffer);
+    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height,
+        VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits samples,
+        VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
     extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
     extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
     extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, ImageLayoutTransitionMode iltm);

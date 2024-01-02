@@ -102,8 +102,8 @@ void SwapChain::createSwapChain() {
     this->defaultDepthImage = new VulkanImage();
     this->defaultDepthImage->imageFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
     createImage(this->ctx, swapChainExtent.width, swapChainExtent.height, defaultDepthImage->imageFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT, defaultDepthImage);
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_SAMPLE_COUNT_1_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, defaultDepthImage);
 
     this->swapChainFramebuffers.resize(this->swapChainImages.size());
     for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
