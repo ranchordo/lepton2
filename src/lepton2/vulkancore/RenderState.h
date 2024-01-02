@@ -35,7 +35,7 @@ namespace lepton2::vulkancore {
         std::vector<ColorAttachmentInfo> colorAttachments;
         bool isTerminatingNode;
         uint32_t nodeIndex = 0;
-        std::vector<std::pair<uint32_t, RenderGraphNode*>> outputs;
+        std::vector<std::pair<uint32_t, RenderGraphNode*>> outputs; // FIXME: Determine if needed
         std::vector<std::pair<uint32_t, RenderGraphNode*>> inputs;
         friend class RenderGraph;
     };

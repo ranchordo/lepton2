@@ -57,10 +57,15 @@ void RenderGraphNode::connectToNode(uint32_t color_output, RenderGraphNode* node
     node->inputs.push_back(ipair);
 }
 
+void RenderGraphNode::destroy_back(VulkanContext* ctx) {
+    // So far nothing
+}
+
 RenderGraphNode* RenderGraph::buildNewNode() {
     RenderGraphNode* node = new RenderGraphNode();
     node->nodeIndex = this->nodes.size();
     this->nodes.push_back(node);
+    return node;
 }
 
 RenderGraph::RenderGraph(VulkanContext* ctx) {
