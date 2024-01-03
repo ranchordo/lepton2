@@ -1,7 +1,6 @@
 #pragma once
 
 #include "VulkanUtils.h"
-#include "Shader.h"
 #include "Framebuffer.h"
 #include "VulkanContext.h"
 
@@ -14,7 +13,6 @@
 // Building a render state needs two passes:
 // One, we traverse with minimal information and build the RenderPass incl. dependencies.
 // Two, we build framebuffers and graphics pipelines for each node.
-bool marked = false;
 namespace lepton2::vulkancore {
     struct ColorAttachmentInfo {
         VkAttachmentDescription desc;
@@ -24,6 +22,7 @@ namespace lepton2::vulkancore {
         void addColorAttachment(VkFormat format, VkSampleCountFlagBits samples, bool clear);
         void connectToNode(uint32_t color_output, RenderGraphNode* node);
         void destroy_back(VulkanContext* ctx) override;
+        uint32_t getSubpassIndex() { return this->nodeIndex; }
     private:
         RenderGraphNode();
         RenderGraphNode(VulkanContext* ctx, bool is_terminating_node);

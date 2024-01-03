@@ -1,7 +1,7 @@
 #include "lepton2/vulkancore/VulkanUtils.h"
 #include "lepton2/vulkancore/VulkanMemory.h"
 #include "lepton2/vulkancore/VulkanContext.h"
-#include "lepton2/vulkancore/Shader.h"
+#include "lepton2/vulkancore/Pipelines.h"
 
 using namespace lepton2::vulkancore;
 
@@ -22,9 +22,6 @@ int main() {
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
     vkctx = new VulkanContext(true, true, appInfo, window);
-
-    Shader shader(vkctx, "shader");
-    shader.destroy(vkctx);
 
     vkctx->destroy(vkctx);
     delete vkctx;
