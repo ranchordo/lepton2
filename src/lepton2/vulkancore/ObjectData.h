@@ -1,0 +1,31 @@
+#pragma once
+#include "VulkanUtils.h"
+#include "VulkanContext.h"
+#include "VulkanObjects.h"
+
+namespace lepton2::vulkancore {
+    struct Vertex {
+        glm::vec3 pos;
+        glm::vec3 color;
+        glm::vec2 texCoord;
+
+        static VkVertexInputBindingDescription getBindingDescription();
+        static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
+    };
+
+    struct HostObjectData {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+    };
+
+    class DeviceObjectData: public DeletableVulkanResource {
+    public:
+        DeviceObjectData(VulkanContext* ctx, HostObjectData hostData);
+        void destroy_back(VulkanContext* ctx) override;
+    private:
+        void doVertexBuffer(VulkanContext* ctx, std::vector<Vertex> hostVertices);
+        void doIndexBuffer(VulkanContext* ctx, std::vector<uint32_t> hostIndices);
+        VulkanBuffer vertexBuffer;
+        VulkanBuffer indexBuffer;
+    };
+}

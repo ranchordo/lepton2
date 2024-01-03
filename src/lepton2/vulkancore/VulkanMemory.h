@@ -31,6 +31,8 @@ namespace lepton2::vulkancore {
         MemoryChonkus* chonkus = nullptr;
         VkDeviceSize offset;
         VkDeviceSize size;
+        void* mapMemory(VulkanContext* ctx, VkMemoryMapFlags flags);
+        void unmapMemory(VulkanContext* ctx);
         bool is_null() { return (chonkus == nullptr) || chonkus->is_null(); }
         void destroy_back(VulkanContext* ctx) override;
     };

@@ -3,6 +3,7 @@
 #include "VulkanUtils.h"
 #include "Framebuffer.h"
 #include "VulkanContext.h"
+#include "Pipelines.h"
 
 // Render graph:
 // Nodes are subpasses, or individual processing / rendering steps
@@ -41,10 +42,15 @@ namespace lepton2::vulkancore {
 
     class RenderGraph;
 
-    struct RenderState {
+    class RenderState: public DeletableVulkanResource {
+    public:
         RenderGraph* graph = nullptr;
-        VkRenderPass renderPass;
-        bool complete = false;
+        VkRenderPass renderPass = VK_NULL_HANDLE;
+        void addPipeline(std::string key, PipelineInfo cInfo);
+        GraphicsPipeline* getPipeline(std::string key);
+        void destroy_back(VulkanContext* ctx) override;
+    private:
+        std::map<std::string, GraphicsPipeline*> pipelines;
     };
 
     class RenderGraph: public DeletableVulkanResource {
@@ -54,12 +60,12 @@ namespace lepton2::vulkancore {
             return this->terminator;
         }
         RenderGraphNode* buildNewNode();
-        RenderState buildRenderState(VulkanContext* ctx);
+        RenderState* buildRenderState();
         void destroy_back(VulkanContext* ctx) override;
     private:
         std::vector<RenderGraphNode*> nodes;
         VulkanContext* ctx;
         RenderGraphNode* terminator;
-        RenderState finalState;
+        friend class RenderState;
     };
 }

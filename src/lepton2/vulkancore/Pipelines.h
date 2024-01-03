@@ -1,22 +1,14 @@
 #pragma once
 
 #include "VulkanUtils.h"
-#include "RenderState.h"
-
 namespace lepton2::vulkancore {
     extern const char* shaders_spirv_load_dir;
-    struct Vertex {
-        glm::vec3 pos;
-        glm::vec3 color;
-        glm::vec2 texCoord;
+    class RenderGraphNode;
 
-        static VkVertexInputBindingDescription getBindingDescription();
-        static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
-    };
-    class GraphicsPipeline: public DeletableVulkanResource {
-    public:
-        GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
-            const char* shader_name, RenderGraphNode* node,
+    // You have become the very thing you swore to destroy.
+    // But I mean we do have these sweet sweet default params
+    struct PipelineInfo {
+        PipelineInfo(const char* shaderName, RenderGraphNode* node,
             std::vector<VkDescriptorSetLayout> descriptorSetLayouts,
             VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
             VkBool32 useStencilTesting = VK_FALSE,
@@ -24,6 +16,20 @@ namespace lepton2::vulkancore {
             VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
             VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
             VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT);
+        const char* shaderName;
+        uint32_t subpassIndex;
+        std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+        VkSampleCountFlagBits samples;
+        VkBool32 useStencilTesting;
+        VkStencilOpState stencilState;
+        VkPolygonMode polygonMode;
+        VkFrontFace frontFace;
+        VkCullModeFlags cullMode;
+    };
+
+    class GraphicsPipeline: public DeletableVulkanResource {
+    public:
+        GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, PipelineInfo cInfo);
         void destroy_back(VulkanContext* ctx) override;
     private:
         VkShaderModule buildShaderModule(VulkanContext* ctx, const std::vector<char>& code);

@@ -6,6 +6,7 @@
 
 namespace lepton2::vulkancore {
     class VulkanContext;
+    class RenderState;
 
     class SwapChain: public DeletableVulkanResource {
     public:
@@ -20,6 +21,6 @@ namespace lepton2::vulkancore {
         void destroy_back(VulkanContext* ctx) override;
         void rebuildSwapChain();
         void createSwapChain();
-        void createFramebuffers(VkRenderPass renderPass, VulkanImage* depthImage);
+        void createFramebuffers(RenderState* renderState);
     };
 }

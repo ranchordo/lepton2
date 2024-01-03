@@ -68,15 +68,34 @@ RenderGraphNode* RenderGraph::buildNewNode() {
     return node;
 }
 
+void RenderState::addPipeline(std::string key, PipelineInfo cInfo) {
+    GraphicsPipeline* pipeline = new GraphicsPipeline(this->graph->ctx, this->renderPass, cInfo);
+    this->pipelines[key] = pipeline;
+}
+
+GraphicsPipeline* RenderState::getPipeline(std::string key) {
+    return this->pipelines[key];
+}
+
+void RenderState::destroy_back(VulkanContext* ctx) {
+    if (this->renderPass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(ctx->device, this->renderPass, nullptr);
+    }
+    for (auto const& p : this->pipelines) {
+        p.second->destroy(ctx);
+        delete p.second;
+    }
+    this->pipelines.clear();
+}
+
 RenderGraph::RenderGraph(VulkanContext* ctx) {
     this->ctx = ctx;
     this->terminator = new RenderGraphNode(ctx, true);
     this->terminator->nodeIndex = this->nodes.size();
     this->nodes.push_back(this->terminator);
-    this->finalState.complete = false;
 }
 
-RenderState RenderGraph::buildRenderState(VulkanContext* ctx) {
+RenderState* RenderGraph::buildRenderState() {
     std::vector<VkAttachmentDescription> attachments;
     VkAttachmentDescription depthStencilAttachment{};
     depthStencilAttachment.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -91,6 +110,7 @@ RenderState RenderGraph::buildRenderState(VulkanContext* ctx) {
     attachments.push_back(depthStencilAttachment);
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
+        node->subpassInfo.colorAttachmentReferences.resize(node->colorAttachments.size());
         for (uint32_t i = 0; i < node->colorAttachments.size(); i++) {
             node->subpassInfo.colorAttachmentReferences[i].attachment = attachments.size();
             node->subpassInfo.colorAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -139,25 +159,21 @@ RenderState RenderGraph::buildRenderState(VulkanContext* ctx) {
         }
     }
 
+
     renderPassInfo.dependencyCount = subpassDependencies.size();
     renderPassInfo.pDependencies = subpassDependencies.data();
 
-    VkRenderPass* dstRenderPass = &this->finalState.renderPass;
+    RenderState* finalState = new RenderState();
+
+    VkRenderPass* dstRenderPass = &finalState->renderPass;
     if (vkCreateRenderPass(ctx->device, &renderPassInfo, nullptr, dstRenderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass.");
     }
-    this->finalState.graph = this;
-
-    return this->finalState;
+    finalState->graph = this;
+    return finalState;
 }
 
 void RenderGraph::destroy_back(VulkanContext* ctx) {
-    if (this->finalState.renderPass != VK_NULL_HANDLE) {
-        vkDestroyRenderPass(ctx->device, this->finalState.renderPass, nullptr);
-    }
-    for (RenderGraphNode* node : this->nodes) {
-        node->destroy(ctx);
-        delete node;
-    }
     this->nodes.clear();
+    // User must destroy all gotten nodes
 }

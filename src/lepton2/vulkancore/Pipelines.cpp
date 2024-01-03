@@ -1,40 +1,29 @@
 #include "Pipelines.h"
 
 #include "VulkanContext.h"
+#include "ObjectData.h"
+#include "RenderState.h"
 
 using namespace lepton2::vulkancore;
 
-VkVertexInputBindingDescription Vertex::getBindingDescription() {
-    VkVertexInputBindingDescription bindingDescription{};
-    bindingDescription.binding = 0;
-    bindingDescription.stride = sizeof(Vertex);
-    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    return bindingDescription;
-}
-
-std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions() {
-    std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
-    VkVertexInputAttributeDescription viad{};
-    viad.binding = 0;
-    viad.location = 0;
-    viad.format = VK_FORMAT_R32G32B32_SFLOAT;
-    viad.offset = offsetof(Vertex, pos);
-    attributeDescriptions.push_back(viad);
-    viad.binding = 0;
-    viad.location = 1;
-    viad.format = VK_FORMAT_R32G32B32_SFLOAT;
-    viad.offset = offsetof(Vertex, color);
-    attributeDescriptions.push_back(viad);
-    viad.binding = 0;
-    viad.location = 2;
-    viad.format = VK_FORMAT_R32G32_SFLOAT;
-    viad.offset = offsetof(Vertex, texCoord);
-    attributeDescriptions.push_back(viad);
-    return attributeDescriptions;
-}
-
 namespace lepton2::vulkancore {
     const char* shaders_spirv_load_dir = "shaders_build";
+}
+
+PipelineInfo::PipelineInfo(const char* _shaderName, RenderGraphNode* _node,
+    std::vector<VkDescriptorSetLayout> _descriptorSetLayouts,
+    VkSampleCountFlagBits _samples, VkBool32 _useStencilTesting,
+    VkStencilOpState _stencilState, VkPolygonMode _polygonMode,
+    VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
+    this->shaderName = _shaderName;
+    this->subpassIndex = _node->getSubpassIndex();
+    this->descriptorSetLayouts = _descriptorSetLayouts;
+    this->samples = _samples;
+    this->useStencilTesting = _useStencilTesting;
+    this->stencilState = _stencilState;
+    this->polygonMode = _polygonMode;
+    this->frontFace = _frontFace;
+    this->cullMode = _cullMode;
 }
 
 VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std::vector<char>& code) {
@@ -49,18 +38,14 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
     return shaderModule;
 }
 
-GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
-    const char* shader_name, RenderGraphNode* node,
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts, VkSampleCountFlagBits samples,
-    VkBool32 useStencilTesting, VkStencilOpState stencilState, VkPolygonMode polygonMode,
-    VkFrontFace frontFace, VkCullModeFlags cullMode) {
+GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, PipelineInfo cInfo) {
 
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", shaders_spirv_load_dir, shader_name);
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
     char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", shaders_spirv_load_dir, shader_name);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
     std::vector<char> vertex_code = readFile(std::string(filename_buffer));
     this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", shaders_spirv_load_dir, shader_name);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", shaders_spirv_load_dir, cInfo.shaderName);
     std::vector<char> fragment_code = readFile(std::string(filename_buffer));
     this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
 
@@ -68,13 +53,13 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vertShaderStageInfo.module = this->vertexShaderModule;
-    vertShaderStageInfo.pName = shader_name;
+    vertShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
     fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragShaderStageInfo.module = this->fragmentShaderModule;
-    fragShaderStageInfo.pName = shader_name;
+    fragShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {
         vertShaderStageInfo,
@@ -112,10 +97,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = polygonMode;
+    rasterizer.polygonMode = cInfo.polygonMode;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = cullMode;
-    rasterizer.frontFace = frontFace;
+    rasterizer.cullMode = cInfo.cullMode;
+    rasterizer.frontFace = cInfo.frontFace;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
@@ -124,7 +109,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = samples;
+    multisampling.rasterizationSamples = cInfo.samples;
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr;
     multisampling.alphaToCoverageEnable = VK_FALSE;
@@ -151,8 +136,8 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
-    pipelineLayoutInfo.setLayoutCount = descriptorSetLayouts.size();
-    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
+    pipelineLayoutInfo.setLayoutCount = cInfo.descriptorSetLayouts.size();
+    pipelineLayoutInfo.pSetLayouts = cInfo.descriptorSetLayouts.data();
 
     if (vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout.");
@@ -166,9 +151,9 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.minDepthBounds = 0.0f;
     depthStencil.maxDepthBounds = 1.0f;
-    depthStencil.stencilTestEnable = useStencilTesting;
-    depthStencil.back = stencilState;
-    depthStencil.front = stencilState;
+    depthStencil.stencilTestEnable = cInfo.useStencilTesting;
+    depthStencil.back = cInfo.stencilState;
+    depthStencil.front = cInfo.stencilState;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -183,8 +168,8 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderState renderState,
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderState.renderPass;
-    pipelineInfo.subpass = node->getSubpassIndex();
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = cInfo.subpassIndex;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 

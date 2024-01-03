@@ -1,6 +1,7 @@
 #include "SwapChain.h"
 
 #include "VulkanContext.h"
+#include "RenderState.h"
 
 using namespace lepton2::vulkancore;
 
@@ -127,6 +128,7 @@ void SwapChain::destroy_back(VulkanContext* ctx) {
         fb->destroy(ctx);
         delete fb;
     }
+    this->swapChainFramebuffers.clear();
     vkDestroySwapchainKHR(ctx->device, this->swapChain, nullptr);
 }
 
@@ -143,8 +145,8 @@ void SwapChain::rebuildSwapChain() {
     this->createSwapChain();
 }
 
-void SwapChain::createFramebuffers(VkRenderPass renderPass, VulkanImage* depthImage) {
+void SwapChain::createFramebuffers(RenderState* renderState) {
     for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
-        swapChainFramebuffers.at(i)->buildFramebuffer(renderPass, swapChainExtent.width, swapChainExtent.height);
+        swapChainFramebuffers.at(i)->buildFramebuffer(renderState->renderPass, swapChainExtent.width, swapChainExtent.height);
     }
 }

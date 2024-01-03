@@ -165,13 +165,15 @@ namespace lepton2::vulkancore {
         return imageView;
     }
 
-    void copyBuffer(VulkanContext* ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+    void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
+        VkDeviceSize srcOffset, VkDeviceSize dstOffset) {
+
         VkCommandBuffer commandBuffer = beginSingleTimeCommands(ctx);
         VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
+        copyRegion.srcOffset = srcOffset;
+        copyRegion.dstOffset = dstOffset;
         copyRegion.size = size;
-        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+        vkCmdCopyBuffer(commandBuffer, src->buffer, dst->buffer, 1, &copyRegion);
 
         endSingleTimeCommands(ctx, commandBuffer);
     }

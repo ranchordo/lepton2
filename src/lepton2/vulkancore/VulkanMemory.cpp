@@ -18,6 +18,18 @@ void MemoryChonklet::destroy_back(VulkanContext* ctx) {
     }
 }
 
+void* MemoryChonklet::mapMemory(VulkanContext* ctx, VkMemoryMapFlags flags) {
+    void* ret;
+    if (vkMapMemory(ctx->device, chonkus->memory, offset, size, flags, &ret) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to map memory.");
+    }
+    return ret;
+}
+
+void MemoryChonklet::unmapMemory(VulkanContext* ctx) {
+    vkUnmapMemory(ctx->device, chonkus->memory);
+}
+
 #ifdef DEBUG_MEMORY_MANAGER
 void printFreeList(MemoryChonkus* chonkus) {
     MemoryChonkletEntry* entry = chonkus->entry;

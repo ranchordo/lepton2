@@ -73,9 +73,11 @@ namespace lepton2::vulkancore {
         VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
     extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
     extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
-    extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, ImageLayoutTransitionMode iltm);
+    extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout,
+        VkImageLayout newLayout, ImageLayoutTransitionMode iltm);
     extern void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
-    extern void copyBuffer(VulkanContext* ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
+        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
     extern std::vector<char> readFile(const std::string& filename);
 }
