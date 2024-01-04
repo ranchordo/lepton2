@@ -52,7 +52,7 @@ void printFreeList(MemoryChonkus* chonkus) {
 #endif
 
 VkDeviceSize getNewSize(VkDeviceSize reqAllocSize) {
-    VkDeviceSize candidate1 = 256 * 1024 * 1024;
+    VkDeviceSize candidate1 = 64 * 1024 * 1024;
     VkDeviceSize candidate2 = reqAllocSize * 4;
     if (candidate1 > candidate2) {
         return candidate1;

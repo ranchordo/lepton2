@@ -290,6 +290,7 @@ void VulkanContext::buildAllCommandPools() {
 
 void VulkanContext::destroy_back(VulkanContext* ctx) {
     this->swapChain.destroy(ctx);
+    this->descriptorPoolManager.destroy(ctx);
     this->allocManager.destroy(ctx);
     if (this->vk_command_pools.normalGraphics != VK_NULL_HANDLE) {
         vkDestroyCommandPool(this->device, vk_command_pools.normalGraphics, nullptr);

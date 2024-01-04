@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -85,4 +86,6 @@ namespace lepton2::vulkancore {
     extern std::vector<char> readFile(const std::string& filename);
     extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
     extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
+    extern std::chrono::system_clock::time_point startTiming();
+    extern double getElapsedSeconds(std::chrono::system_clock::time_point time_point);
 }

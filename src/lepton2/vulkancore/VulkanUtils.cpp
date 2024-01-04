@@ -219,4 +219,14 @@ namespace lepton2::vulkancore {
         }
         return ret;
     }
+
+    std::chrono::system_clock::time_point startTiming() {
+        return std::chrono::high_resolution_clock::now();
+    }
+
+    double getElapsedSeconds(std::chrono::system_clock::time_point time_point) {
+        std::chrono::system_clock::time_point now = startTiming();
+        std::chrono::duration<double> interval = now - time_point;
+        return interval.count();
+    }
 }

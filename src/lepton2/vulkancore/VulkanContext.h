@@ -3,6 +3,7 @@
 #include "VulkanUtils.h"
 #include "VulkanMemory.h"
 #include "SwapChain.h"
+#include "Descriptors.h"
 
 namespace lepton2::vulkancore {
 
@@ -59,6 +60,7 @@ namespace lepton2::vulkancore {
         } vk_command_pools;
         VulkanAllocationManager allocManager;
         SwapChain swapChain;
+        DescriptorPoolManager descriptorPoolManager;
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
         SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
         void destroy_back(VulkanContext* ctx) override;

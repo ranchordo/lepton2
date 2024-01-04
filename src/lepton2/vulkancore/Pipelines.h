@@ -31,6 +31,12 @@ namespace lepton2::vulkancore {
     public:
         GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, PipelineInfo cInfo);
         void bind(VkCommandBuffer commandBuffer);
+        VkPipelineLayout getPipelineLayout() {
+            return this->pipelineLayout;
+        }
+        VkPipeline getPipeline() {
+            return this->pipeline;
+        }
         void destroy_back(VulkanContext* ctx) override;
     private:
         VkShaderModule buildShaderModule(VulkanContext* ctx, const std::vector<char>& code);
