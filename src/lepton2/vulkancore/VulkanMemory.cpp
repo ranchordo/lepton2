@@ -70,7 +70,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
         VkDeviceSize newSize = getNewSize(size);
         MemoryChonkus newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
-        printf("Building new chonkus vector with size %d\n", (int)newSize);
+        printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus.memory);
 #endif
         std::vector<MemoryChonkus> newChonki = { newChonkus };
         std::vector<MemoryChonkus>& lookup = chonki[memoryTypeIndex];
@@ -88,10 +88,10 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
         }
         if (cEntry == nullptr) {
             VkDeviceSize newSize = getNewSize(size);
-#ifdef DEBUG_MEMORY_MANAGER
-            printf("Building new chonkus on existing vector with size %d\n", (int)newSize);
-#endif
             MemoryChonkus newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
+#ifdef DEBUG_MEMORY_MANAGER
+            printf("Building new chonkus on existing vector with size %d, pointer is %p\n", (int)newSize, newChonkus.memory);
+#endif
             std::vector<MemoryChonkus>& lookup = chonki[memoryTypeIndex];
             lookup.push_back(newChonkus);
             selectedChonkus = &lookup.back();
@@ -108,11 +108,14 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
 #ifdef DEBUG_MEMORY_MANAGER
         printf("Inserting offs:%d, size:%d\n", (int)nEntry->offset, (int)nEntry->size);
 #endif
+        if (cEntry->next != nullptr) {
+            cEntry->next->prev = nEntry;
+        }
         cEntry->next = nEntry;
         cEntry->size = size;
     }
 #ifdef DEBUG_MEMORY_MANAGER
-    printf("After insertion: ");
+    printf("After insertion (chonkus %p): ", selectedChonkus);
     printFreeList(selectedChonkus);
     printf("\n");
 #endif
@@ -166,7 +169,7 @@ void VulkanAllocationManager::deleteEntry(MemoryChonkus* chonkus, MemoryChonklet
 
 MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size) {
 #ifdef DEBUG_MEMORY_MANAGER
-    printf("Finding an entry.\nFreeList: ");
+    printf("Finding an entry on chonkus %p.\nFreeList: ", chonkus);
     printFreeList(chonkus);
     printf("\n");
 #endif
@@ -317,7 +320,7 @@ void VulkanAllocationManager::destroy_back(VulkanContext* ctx) {
         std::vector<MemoryChonkus>& vec = x.second;
         for (MemoryChonkus& c : vec) {
 #ifdef DEBUG_MEMORY_MANAGER
-            printf("Destroying chonkus %p\n", c.memory);
+            printf("!!! Destroying chonkus %p from cleanup! Should be deleted already!\n", c.memory);
 #endif
             c.destroy(ctx);
         }

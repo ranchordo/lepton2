@@ -48,6 +48,7 @@ namespace lepton2::vulkancore {
     class VulkanContext;
     class VulkanImage;
     class VulkanBuffer;
+    struct RenderTargetImageCreationInfo;
 
     class DeletableVulkanResource {
     public:
@@ -71,6 +72,8 @@ namespace lepton2::vulkancore {
     extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height,
         VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits samples,
         VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
+    extern void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
+        RenderTargetImageCreationInfo* rticInfo, VulkanImage* image);
     extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
     extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
     extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout,
@@ -80,4 +83,6 @@ namespace lepton2::vulkancore {
     extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
         VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
     extern std::vector<char> readFile(const std::string& filename);
+    extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
+    extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
 }

@@ -1,5 +1,6 @@
 #include "VulkanUtils.h"
 #include "VulkanContext.h"
+#include "RenderState.h"
 
 namespace lepton2::vulkancore {
 
@@ -59,6 +60,13 @@ namespace lepton2::vulkancore {
         image->do_not_destroy_image = false;
         image->findMemory(ctx, properties);
         image->buildImageView(ctx, aspectFlags);
+    }
+
+    void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
+        RenderTargetImageCreationInfo* rticInfo, VulkanImage* image) {
+        createImage(ctx, extent.width, extent.height, rticInfo->format,
+            rticInfo->imageTiling, rticInfo->usage, rticInfo->samples,
+            rticInfo->memoryProperties, rticInfo->aspectFlags, image);
     }
 
     VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx) {
@@ -189,5 +197,26 @@ namespace lepton2::vulkancore {
         file.read(buffer.data(), fsize);
         file.close();
         return buffer;
+    }
+
+    VkSemaphore createGenericSemaphore(VulkanContext* ctx) {
+        VkSemaphore ret;
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        if (vkCreateSemaphore(ctx->device, &semaphoreInfo, nullptr, &ret) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create generic semaphore.");
+        }
+        return ret;
+    }
+
+    VkFence createGenericFence(VulkanContext* ctx, bool signaled) {
+        VkFence ret;
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
+        if (vkCreateFence(ctx->device, &fenceInfo, nullptr, &ret) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create generic fence.");
+        }
+        return ret;
     }
 }

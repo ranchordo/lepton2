@@ -58,12 +58,22 @@ void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, std::vector<uint32_t> h
     }
     stagingBuffer.chonklet.unmapMemory(ctx);
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    createBuffer(ctx, bufferSize, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->vertexBuffer);
-    copyBuffer(ctx, &stagingBuffer, &vertexBuffer, bufferSize);
+    createBuffer(ctx, bufferSize, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->indexBuffer);
+    copyBuffer(ctx, &stagingBuffer, &indexBuffer, bufferSize);
     stagingBuffer.destroy(ctx);
 }
 
 DeviceObjectData::DeviceObjectData(VulkanContext* ctx, HostObjectData hostData) {
     this->doVertexBuffer(ctx, hostData.vertices);
     this->doIndexBuffer(ctx, hostData.indices);
+}
+
+void DeviceObjectData::destroy_back(VulkanContext* ctx) {
+    this->vertexBuffer.destroy(ctx);
+    this->indexBuffer.destroy(ctx);
+}
+
+void DeviceObjectData::bind(VkCommandBuffer commandBuffer, VkDeviceSize offset) {
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &this->vertexBuffer.buffer, &offset);
+    vkCmdBindIndexBuffer(commandBuffer, this->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 }

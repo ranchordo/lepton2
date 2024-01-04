@@ -3,29 +3,21 @@
 
 using namespace lepton2::vulkancore;
 
-void Framebuffer::addColorImage(VulkanImage* image) {
-    this->colorImages.push_back(image);
-}
-
-void Framebuffer::setDepthImage(VulkanImage* image) {
-    this->depthImage = image;
+void Framebuffer::addImage(VulkanImage* image) {
+    this->images.push_back(image);
 }
 
 void Framebuffer::destroy_back(VulkanContext* ctx) {
-    this->colorImages.clear();
+    this->images.clear();
     if (this->framebuffer != VK_NULL_HANDLE) {
         vkDestroyFramebuffer(ctx->device, this->framebuffer, nullptr);
     }
 }
 
-void Framebuffer::buildFramebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height) {
+void Framebuffer::buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, uint32_t width, uint32_t height) {
     std::vector<VkImageView> attachments;
-    attachments.resize(this->colorImages.size() + 1);
-    for (uint32_t i = 0; i < this->colorImages.size(); i++) {
-        attachments.push_back(this->colorImages.at(i)->imageView);
-    }
-    if (this->depthImage->imageView != VK_NULL_HANDLE) {
-        attachments.push_back(this->depthImage->imageView);
+    for (uint32_t i = 0; i < this->images.size(); i++) {
+        attachments.push_back(this->images[i]->imageView);
     }
 
     VkFramebufferCreateInfo framebufferInfo{};
@@ -36,4 +28,7 @@ void Framebuffer::buildFramebuffer(VkRenderPass renderPass, uint32_t width, uint
     framebufferInfo.width = width;
     framebufferInfo.height = height;
     framebufferInfo.layers = 1;
+    if (vkCreateFramebuffer(ctx->device, &framebufferInfo, nullptr, &this->framebuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create a framebuffer.");
+    }
 }

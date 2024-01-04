@@ -3,6 +3,7 @@
 #include "VulkanUtils.h"
 #include "Framebuffer.h"
 #include "VulkanContext.h"
+#include "SwapChain.h"
 #include "Pipelines.h"
 
 // Render graph:
@@ -15,12 +16,25 @@
 // One, we traverse with minimal information and build the RenderPass incl. dependencies.
 // Two, we build framebuffers and graphics pipelines for each node.
 namespace lepton2::vulkancore {
+    struct RenderTargetImageCreationInfo {
+        bool use_swapchain = false;
+        VkFormat format;
+        VkSampleCountFlagBits samples;
+        VkImageTiling imageTiling;
+        VkImageUsageFlags usage;
+        VkMemoryPropertyFlags memoryProperties;
+        VkImageAspectFlags aspectFlags;
+    };
+
     struct ColorAttachmentInfo {
         VkAttachmentDescription desc;
+        RenderTargetImageCreationInfo rticInfo;
+        VkClearValue clearValue = { 0.0f, 0.0f, 0.0f, 0.0f };
     };
+
     class RenderGraphNode: public DeletableVulkanResource {
     public:
-        void addColorAttachment(VkFormat format, VkSampleCountFlagBits samples, bool clear);
+        void addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
         void connectToNode(uint32_t color_output, RenderGraphNode* node);
         void destroy_back(VulkanContext* ctx) override;
         uint32_t getSubpassIndex() { return this->nodeIndex; }
@@ -44,13 +58,18 @@ namespace lepton2::vulkancore {
 
     class RenderState: public DeletableVulkanResource {
     public:
-        RenderGraph* graph = nullptr;
         VkRenderPass renderPass = VK_NULL_HANDLE;
+        std::vector<VkClearValue*> clearValuePtrs;
+        std::vector<RenderTargetImageCreationInfo> rticInfos;
         void addPipeline(std::string key, PipelineInfo cInfo);
         GraphicsPipeline* getPipeline(std::string key);
+        void bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame);
         void destroy_back(VulkanContext* ctx) override;
+        VkClearValue depthStencilClearValue = { 1.0f, 0 };
     private:
         std::map<std::string, GraphicsPipeline*> pipelines;
+        VulkanContext* ctx = nullptr;
+        friend class RenderGraph;
     };
 
     class RenderGraph: public DeletableVulkanResource {

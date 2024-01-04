@@ -178,6 +178,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, 
     }
 }
 
+void GraphicsPipeline::bind(VkCommandBuffer commandBuffer) {
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
+}
+
 void GraphicsPipeline::destroy_back(VulkanContext* ctx) {
     if (this->vertexShaderModule != VK_NULL_HANDLE) {
         vkDestroyShaderModule(ctx->device, vertexShaderModule, nullptr);

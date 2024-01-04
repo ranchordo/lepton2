@@ -284,13 +284,13 @@ void VulkanContext::buildAllCommandPools() {
         VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
             | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         uint32_t queueFamilyIndex = indices.graphicsFamily.value();
-        this->buildCommandPool(flags, queueFamilyIndex, &this->vk_command_pools.normalGraphics);
+        this->buildCommandPool(flags, queueFamilyIndex, &this->vk_command_pools.transientGraphics);
     }
 }
 
 void VulkanContext::destroy_back(VulkanContext* ctx) {
-    this->allocManager.destroy(ctx);
     this->swapChain.destroy(ctx);
+    this->allocManager.destroy(ctx);
     if (this->vk_command_pools.normalGraphics != VK_NULL_HANDLE) {
         vkDestroyCommandPool(this->device, vk_command_pools.normalGraphics, nullptr);
     }

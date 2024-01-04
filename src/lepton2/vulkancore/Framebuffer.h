@@ -8,11 +8,9 @@ namespace lepton2::vulkancore {
     class Framebuffer: public DeletableVulkanResource {
     public:
         Framebuffer() {}
-        void addColorImage(VulkanImage* image);
-        void setDepthImage(VulkanImage* image);
-        void buildFramebuffer(VkRenderPass renderPass, uint32_t width, uint32_t height);
-        VulkanImage* depthImage;
-        std::vector<VulkanImage*> colorImages;
+        void addImage(VulkanImage* image);
+        void buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, uint32_t width, uint32_t height);
+        std::vector<VulkanImage*> images;
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         void destroy_back(VulkanContext* ctx) override;
     };

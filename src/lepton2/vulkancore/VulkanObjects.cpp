@@ -7,8 +7,13 @@ void VulkanImage::findMemory(VulkanContext* ctx, VkMemoryPropertyFlags propertie
     VkMemoryRequirements req;
     vkGetImageMemoryRequirements(ctx->device, this->image, &req);
     uint32_t memoryTypeIndex = findMemoryType(ctx, req.memoryTypeBits, properties);
-    this->chonklet = ctx->allocManager.findMemory(req.size, memoryTypeIndex);
-    vkBindImageMemory(ctx->device, this->image, this->chonklet.chonkus->memory, this->chonklet.offset);
+    this->chonklet = ctx->allocManager.findMemory(req.size + req.alignment, memoryTypeIndex);
+    VkDeviceSize offset = this->chonklet.offset;
+    if (req.alignment != 0) {
+        // *Evil precision magic intensifies* //
+        offset = ((offset + req.alignment - 1) / req.alignment) * req.alignment;
+    }
+    vkBindImageMemory(ctx->device, this->image, this->chonklet.chonkus->memory, offset);
 }
 
 void VulkanImage::buildImageView(VulkanContext* ctx, VkImageAspectFlags aspectFlags) {

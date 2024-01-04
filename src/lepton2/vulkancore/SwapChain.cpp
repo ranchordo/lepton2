@@ -40,22 +40,30 @@ VkExtent2D chooseSwapExtent(VulkanContext* ctx, const VkSurfaceCapabilitiesKHR& 
     }
 }
 
-void SwapChain::createSwapChain() {
+void SwapChain::querySwapChain() {
     SwapChainSupportDetails swapChainSupport = ctx->querySwapChainSupport(ctx->physicalDevice);
-    VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
-    VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-    VkExtent2D extent = chooseSwapExtent(ctx, swapChainSupport.capabilities);
+    this->swapChainQueryResults.surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+    this->swapChainQueryResults.presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+    this->swapChainExtent = chooseSwapExtent(ctx, swapChainSupport.capabilities);
+    this->swapChainQueryResults.currentTransform = swapChainSupport.capabilities.currentTransform;
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
     if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
         imageCount = swapChainSupport.capabilities.maxImageCount;
     }
+    this->swapChainQueryResults.imageCount = imageCount;
+    this->swapChainImageFormat = swapChainQueryResults.surfaceFormat.format;
+}
+
+void SwapChain::buildSwapChain(RenderState* renderState) {
+    this->renderState = renderState;
+    
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = ctx->surface;
-    createInfo.minImageCount = imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = extent;
+    createInfo.minImageCount = swapChainQueryResults.imageCount;
+    createInfo.imageFormat = swapChainQueryResults.surfaceFormat.format;
+    createInfo.imageColorSpace = swapChainQueryResults.surfaceFormat.colorSpace;
+    createInfo.imageExtent = swapChainExtent;
     createInfo.imageArrayLayers = 1; // For stereoscopy, maybe 2?
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
@@ -73,22 +81,20 @@ void SwapChain::createSwapChain() {
         createInfo.queueFamilyIndexCount = 0;
         createInfo.pQueueFamilyIndices = nullptr;
     }
-    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+    createInfo.preTransform = swapChainQueryResults.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // TODO: Figure out proper alpha compositing.
-    createInfo.presentMode = presentMode;
+    createInfo.presentMode = swapChainQueryResults.presentMode;
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
     if (vkCreateSwapchainKHR(ctx->device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create swapchain.");
     }
-    vkGetSwapchainImagesKHR(ctx->device, swapChain, &imageCount, nullptr);
-    swapChainImages.resize(imageCount);
+    vkGetSwapchainImagesKHR(ctx->device, swapChain, &swapChainQueryResults.imageCount, nullptr);
+    swapChainImages.resize(swapChainQueryResults.imageCount);
     std::vector<VkImage> swapChainVkImages;
-    swapChainVkImages.resize(imageCount);
-    swapChainImages.resize(imageCount);
-    vkGetSwapchainImagesKHR(ctx->device, swapChain, &imageCount, swapChainVkImages.data());
-    swapChainImageFormat = surfaceFormat.format;
-    swapChainExtent = extent;
+    swapChainVkImages.resize(swapChainQueryResults.imageCount);
+    swapChainImages.resize(swapChainQueryResults.imageCount);
+    vkGetSwapchainImagesKHR(ctx->device, swapChain, &swapChainQueryResults.imageCount, swapChainVkImages.data());
     // Create image views
     for (size_t i = 0; i < swapChainImages.size(); i++) {
         swapChainImages[i] = new VulkanImage();
@@ -99,20 +105,20 @@ void SwapChain::createSwapChain() {
         swapChainImages[i]->chonklet.chonkus = nullptr;
     }
 
-    // Create default depth image
-    this->defaultDepthImage = new VulkanImage();
-    this->defaultDepthImage->imageFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    createImage(this->ctx, swapChainExtent.width, swapChainExtent.height, defaultDepthImage->imageFormat,
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_SAMPLE_COUNT_1_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, defaultDepthImage);
-
     this->swapChainFramebuffers.resize(this->swapChainImages.size());
     for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
         Framebuffer* nfb = new Framebuffer();
-        nfb->addColorImage(this->swapChainImages.at(i));
-        nfb->setDepthImage(defaultDepthImage);
-        // Don't actually build yet, need a renderPass object
-        // But we can still set these up as framebuffer structural references.
+        for (RenderTargetImageCreationInfo rticInfo : renderState->rticInfos) {
+            if (rticInfo.use_swapchain) {
+                nfb->addImage(swapChainImages[i]);
+            } else {
+                VulkanImage* rtImage = new VulkanImage();
+                createRenderTarget(ctx, swapChainExtent, &rticInfo, rtImage);
+                nfb->addImage(rtImage);
+                this->renderTargetImages.push_back(rtImage);
+            }
+        }
+        nfb->buildFramebuffer(ctx, renderState->renderPass, swapChainExtent.width, swapChainExtent.height);
         this->swapChainFramebuffers[i] = nfb;
     }
 }
@@ -122,8 +128,12 @@ void SwapChain::destroy_back(VulkanContext* ctx) {
         img->destroy(ctx);
         delete img;
     }
-    this->defaultDepthImage->destroy(ctx);
-    delete this->defaultDepthImage;
+    this->swapChainImages.clear();
+    for (VulkanImage* img : this->renderTargetImages) {
+        img->destroy(ctx);
+        delete img;
+    }
+    this->renderTargetImages.clear();
     for (Framebuffer* fb : this->swapChainFramebuffers) {
         fb->destroy(ctx);
         delete fb;
@@ -133,6 +143,9 @@ void SwapChain::destroy_back(VulkanContext* ctx) {
 }
 
 void SwapChain::rebuildSwapChain() {
+    if (this->renderState == nullptr) {
+        throw std::runtime_error("Can't rebuild swap chain without building it first.");
+    }
     int width = 0, height = 0;
     glfwGetFramebufferSize(ctx->window, &width, &height);
     while (width == 0 || height == 0) {
@@ -142,11 +155,41 @@ void SwapChain::rebuildSwapChain() {
 
     vkDeviceWaitIdle(ctx->device);
     this->destroy_back(this->ctx);
-    this->createSwapChain();
+    this->querySwapChain();
+    this->buildSwapChain(this->renderState);
 }
 
-void SwapChain::createFramebuffers(RenderState* renderState) {
-    for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
-        swapChainFramebuffers.at(i)->buildFramebuffer(renderState->renderPass, swapChainExtent.width, swapChainExtent.height);
+void SwapChain::updateViewportScissor(VkCommandBuffer commandBuffer) {
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)swapChainExtent.width;
+    viewport.height = (float)swapChainExtent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+SwapChainFrame SwapChain::getFrameInternal(VkSemaphore semaphore) {
+    SwapChainFrame frame;
+    frame.result = vkAcquireNextImageKHR(ctx->device, swapChain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &frame.index);
+    return frame;
+}
+
+SwapChainFrame SwapChain::getFrame(VkSemaphore semaphore) {
+    SwapChainFrame frame = this->getFrameInternal(semaphore);
+    if (frame.result == VK_ERROR_OUT_OF_DATE_KHR) {
+        this->rebuildSwapChain();
+        frame = this->getFrameInternal(semaphore);
     }
+    if (frame.result != VK_SUCCESS && frame.result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("Failed to grab swapchain index.");
+    }
+    frame.framebuffer = this->swapChainFramebuffers[frame.index];
+    frame.image = this->swapChainImages[frame.index];
+    return frame;
 }

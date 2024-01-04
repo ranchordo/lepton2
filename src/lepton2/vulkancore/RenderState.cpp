@@ -13,25 +13,29 @@ RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) {
     VkAttachmentDescription desc{};
     desc.format = ctx->swapChain.swapChainImageFormat;
     desc.samples = VK_SAMPLE_COUNT_1_BIT;
-    desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    bool clear = ctx->swapChain.clearSwapChain;
+    desc.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    RenderTargetImageCreationInfo rticInfo;
+    rticInfo.use_swapchain = true;
     ColorAttachmentInfo info;
     info.desc = desc;
+    info.rticInfo = rticInfo;
 
     this->colorAttachments.push_back(info);
 }
 
-void RenderGraphNode::addColorAttachment(VkFormat format, VkSampleCountFlagBits samples, bool clear) {
+void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear) {
     if (this->isTerminatingNode) {
         throw std::runtime_error("Color attachments of presenting/terminating nodes in the RenderGraph are predefined.");
     }
     VkAttachmentDescription desc{};
-    desc.format = format;
-    desc.samples = samples;
+    desc.format = rticInfo.format;
+    desc.samples = rticInfo.samples;
     desc.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -40,6 +44,7 @@ void RenderGraphNode::addColorAttachment(VkFormat format, VkSampleCountFlagBits 
     desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     ColorAttachmentInfo info;
     info.desc = desc;
+    info.rticInfo = rticInfo;
 
     this->colorAttachments.push_back(info);
 }
@@ -69,12 +74,32 @@ RenderGraphNode* RenderGraph::buildNewNode() {
 }
 
 void RenderState::addPipeline(std::string key, PipelineInfo cInfo) {
-    GraphicsPipeline* pipeline = new GraphicsPipeline(this->graph->ctx, this->renderPass, cInfo);
+    GraphicsPipeline* pipeline = new GraphicsPipeline(this->ctx, this->renderPass, cInfo);
     this->pipelines[key] = pipeline;
 }
 
 GraphicsPipeline* RenderState::getPipeline(std::string key) {
     return this->pipelines[key];
+}
+
+void RenderState::bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = swapChainFrame.framebuffer->framebuffer;
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = ctx->swapChain.swapChainExtent;
+
+    std::vector<VkClearValue> clearValues;
+    clearValues.resize(this->clearValuePtrs.size());
+    for (uint32_t i = 0; i < this->clearValuePtrs.size(); i++) {
+        // De-reference clearvalue
+        clearValues[i] = *this->clearValuePtrs[i];
+    }
+    renderPassInfo.clearValueCount = (uint32_t)clearValues.size();
+    renderPassInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 
 void RenderState::destroy_back(VulkanContext* ctx) {
@@ -96,10 +121,20 @@ RenderGraph::RenderGraph(VulkanContext* ctx) {
 }
 
 RenderState* RenderGraph::buildRenderState() {
+    RenderState* finalState = new RenderState();
     std::vector<VkAttachmentDescription> attachments;
+
+    RenderTargetImageCreationInfo depthStencilCreationInfo{};
+    depthStencilCreationInfo.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    depthStencilCreationInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthStencilCreationInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
+    depthStencilCreationInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    depthStencilCreationInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    depthStencilCreationInfo.aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthStencilCreationInfo.use_swapchain = false;
     VkAttachmentDescription depthStencilAttachment{};
-    depthStencilAttachment.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    depthStencilAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthStencilAttachment.format = depthStencilCreationInfo.format;
+    depthStencilAttachment.samples = depthStencilCreationInfo.samples;
     depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthStencilAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthStencilAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -108,12 +143,16 @@ RenderState* RenderGraph::buildRenderState() {
     depthStencilAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     uint32_t depthStencilAttachmentIndex = attachments.size();
     attachments.push_back(depthStencilAttachment);
+    finalState->rticInfos.push_back(depthStencilCreationInfo);
+    finalState->clearValuePtrs.push_back(&finalState->depthStencilClearValue);
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
         node->subpassInfo.colorAttachmentReferences.resize(node->colorAttachments.size());
         for (uint32_t i = 0; i < node->colorAttachments.size(); i++) {
             node->subpassInfo.colorAttachmentReferences[i].attachment = attachments.size();
             node->subpassInfo.colorAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            finalState->rticInfos.push_back(node->colorAttachments[i].rticInfo);
+            finalState->clearValuePtrs.push_back(&node->colorAttachments[i].clearValue);
             attachments.push_back(node->colorAttachments[i].desc);
         }
         node->subpassInfo.depthStencilAttachmentReference.attachment = depthStencilAttachmentIndex;
@@ -159,17 +198,14 @@ RenderState* RenderGraph::buildRenderState() {
         }
     }
 
-
     renderPassInfo.dependencyCount = subpassDependencies.size();
     renderPassInfo.pDependencies = subpassDependencies.data();
-
-    RenderState* finalState = new RenderState();
 
     VkRenderPass* dstRenderPass = &finalState->renderPass;
     if (vkCreateRenderPass(ctx->device, &renderPassInfo, nullptr, dstRenderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass.");
     }
-    finalState->graph = this;
+    finalState->ctx = this->ctx;
     return finalState;
 }
 

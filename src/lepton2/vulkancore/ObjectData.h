@@ -14,6 +14,10 @@ namespace lepton2::vulkancore {
     };
 
     struct HostObjectData {
+        HostObjectData(std::vector<Vertex> _vertices, std::vector<uint32_t> _indices) {
+            this->vertices = _vertices;
+            this->indices = _indices;
+        }
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
     };
@@ -21,6 +25,7 @@ namespace lepton2::vulkancore {
     class DeviceObjectData: public DeletableVulkanResource {
     public:
         DeviceObjectData(VulkanContext* ctx, HostObjectData hostData);
+        void bind(VkCommandBuffer commandBuffer, VkDeviceSize offset);
         void destroy_back(VulkanContext* ctx) override;
     private:
         void doVertexBuffer(VulkanContext* ctx, std::vector<Vertex> hostVertices);

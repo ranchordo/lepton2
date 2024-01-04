@@ -41,7 +41,8 @@ namespace lepton2::vulkancore {
             this->createSurface();
             this->pickPhysicalDevice();
             this->createLogicalDevice();
-            this->swapChain.createSwapChain();
+            this->swapChain.querySwapChain();
+            this->buildAllCommandPools();
         }
         GLFWwindow* window;
         VkInstance instance;
