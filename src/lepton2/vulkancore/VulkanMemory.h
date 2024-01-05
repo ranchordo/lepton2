@@ -44,11 +44,11 @@ namespace lepton2::vulkancore {
         void freeChonklet(MemoryChonklet chonklet);
         void destroy_back(VulkanContext* ctx) override;
     private:
-        MemoryChonkus buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex);
+        MemoryChonkus* buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex);
         MemoryChonkletEntry* findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size);
         void deleteEntry(MemoryChonkus* chonkus, MemoryChonkletEntry* entry);
         void checkChonkusDeletion(MemoryChonkus* chonkus);
-        std::map<uint32_t, std::vector<MemoryChonkus>> chonki;
+        std::map<uint32_t, std::vector<MemoryChonkus*>> chonki;
         VulkanContext* ctx;
     };
 }

@@ -68,19 +68,19 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
     MemoryChonkus* selectedChonkus;
     if (chonki.count(memoryTypeIndex) == 0 || chonki[memoryTypeIndex].size() == 0) {
         VkDeviceSize newSize = getNewSize(size);
-        MemoryChonkus newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
+        MemoryChonkus* newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
-        printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus.memory);
+        printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus->memory);
 #endif
-        std::vector<MemoryChonkus> newChonki = { newChonkus };
-        std::vector<MemoryChonkus>& lookup = chonki[memoryTypeIndex];
+        std::vector<MemoryChonkus*> newChonki = { newChonkus };
+        std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
         lookup = newChonki;
-        selectedChonkus = lookup.data();
+        selectedChonkus = newChonkus;
         cEntry = this->findAvailableEntry(selectedChonkus, size);
     } else {
-        std::vector<MemoryChonkus>& allChonki = chonki[memoryTypeIndex];
+        std::vector<MemoryChonkus*>& allChonki = chonki[memoryTypeIndex];
         for (int32_t i = allChonki.size() - 1; i >= 0; i--) {
-            selectedChonkus = allChonki.data() + i;
+            selectedChonkus = allChonki[i];
             cEntry = this->findAvailableEntry(selectedChonkus, size);
             if (cEntry != nullptr) {
                 break;
@@ -88,13 +88,16 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
         }
         if (cEntry == nullptr) {
             VkDeviceSize newSize = getNewSize(size);
-            MemoryChonkus newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
+            MemoryChonkus* newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
-            printf("Building new chonkus on existing vector with size %d, pointer is %p\n", (int)newSize, newChonkus.memory);
+            printf("Building new chonkus on existing vector with size %d, pointer is %p, ", (int)newSize, newChonkus->memory);
 #endif
-            std::vector<MemoryChonkus>& lookup = chonki[memoryTypeIndex];
+            std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
             lookup.push_back(newChonkus);
-            selectedChonkus = &lookup.back();
+            selectedChonkus = newChonkus;
+#ifdef DEBUG_MEMORY_MANAGER
+            printf("chonkus %p\n", selectedChonkus);
+#endif
             cEntry = this->findAvailableEntry(selectedChonkus, size);
         }
     }
@@ -133,18 +136,18 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
     return ret;
 }
 
-MemoryChonkus VulkanAllocationManager::buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex) {
-    MemoryChonkus chonkus;
-    chonkus.allocationSize = size;
-    chonkus.entry = new MemoryChonkletEntry(0, size, nullptr, nullptr);
-    chonkus.memory_type = memoryTypeIndex;
-    chonkus.memory = VK_NULL_HANDLE;
+MemoryChonkus* VulkanAllocationManager::buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex) {
+    MemoryChonkus* chonkus = new MemoryChonkus();
+    chonkus->allocationSize = size;
+    chonkus->entry = new MemoryChonkletEntry(0, size, nullptr, nullptr);
+    chonkus->memory_type = memoryTypeIndex;
+    chonkus->memory = VK_NULL_HANDLE;
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
-    if (vkAllocateMemory(this->ctx->device, &allocInfo, nullptr, &chonkus.memory) != VK_SUCCESS) {
+    if (vkAllocateMemory(this->ctx->device, &allocInfo, nullptr, &chonkus->memory) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate chonkus memory.");
     }
     return chonkus;
@@ -183,17 +186,23 @@ MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* 
             return current;
         }
         if (current->next == nullptr) {
+#ifdef DEBUG_MEMORY_MANAGER
+            printf("No entry found, case1!\n");
+#endif
             return nullptr;
         }
         current = current->next;
     }
+#ifdef DEBUG_MEMORY_MANAGER
+    printf("No entry found, case2!\n");
+#endif
     return nullptr;
 }
 
 void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
     CHECK_DESTRUCTION_VOID();
 #ifdef DEBUG_MEMORY_MANAGER
-    printf("Trying to free offs:%d, size:%d\n", (int)chonklet.offset, (int)chonklet.size);
+    printf("Trying to free offs:%d, size:%d, ck:%p\n", (int)chonklet.offset, (int)chonklet.size, chonklet.chonkus);
     printf("Initial state: ");
     printFreeList(chonklet.chonkus);
     printf("\n");
@@ -298,9 +307,9 @@ void VulkanAllocationManager::checkChonkusDeletion(MemoryChonkus* chonkus) {
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Conditions met. Deleting this chonkus...\n");
 #endif
-    std::vector<MemoryChonkus>& allChonki = this->chonki[chonkus->memory_type];
+    std::vector<MemoryChonkus*>& allChonki = this->chonki[chonkus->memory_type];
     for (uint32_t i = 0; i < allChonki.size(); i++) {
-        if (allChonki[i].memory == chonkus->memory) {
+        if (allChonki[i] == chonkus) {
 #ifdef DEBUG_MEMORY_MANAGER
             printf("Deleting chonkus with index %d, old length is %d, ", (int)i, (int)allChonki.size());
 #endif
@@ -309,6 +318,7 @@ void VulkanAllocationManager::checkChonkusDeletion(MemoryChonkus* chonkus) {
             printf("new length is %d\n", (int)allChonki.size());
 #endif
             chonkus->destroy_back(this->ctx);
+            delete chonkus;
             return;
         }
     }
@@ -317,12 +327,13 @@ void VulkanAllocationManager::checkChonkusDeletion(MemoryChonkus* chonkus) {
 
 void VulkanAllocationManager::destroy_back(VulkanContext* ctx) {
     for (auto& x : this->chonki) {
-        std::vector<MemoryChonkus>& vec = x.second;
-        for (MemoryChonkus& c : vec) {
+        std::vector<MemoryChonkus*>& vec = x.second;
+        for (MemoryChonkus* c : vec) {
 #ifdef DEBUG_MEMORY_MANAGER
-            printf("!!! Destroying chonkus %p from cleanup! Should be deleted already!\n", c.memory);
+            printf("!!! Destroying chonkus %p from cleanup! Should be deleted already!\n", c->memory);
 #endif
-            c.destroy(ctx);
+            c->destroy(ctx);
+            delete c;
         }
         vec.clear();
     }
