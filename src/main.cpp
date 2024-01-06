@@ -1,9 +1,9 @@
-#include "lepton2/vulkancore/VulkanUtils.h"
-#include "lepton2/vulkancore/VulkanMemory.h"
-#include "lepton2/vulkancore/VulkanContext.h"
-#include "lepton2/vulkancore/RenderState.h"
-#include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/ObjectData.h"
+#include "lepton2/vulkancore/Pipelines.h"
+#include "lepton2/vulkancore/RenderState.h"
+#include "lepton2/vulkancore/VulkanContext.h"
+#include "lepton2/vulkancore/VulkanMemory.h"
+#include "lepton2/vulkancore/VulkanUtils.h"
 
 using namespace lepton2::vulkancore;
 
@@ -14,10 +14,10 @@ using namespace lepton2::vulkancore;
 VulkanContext* ctx;
 
 std::vector<Vertex> vertices = {
-    {{ -0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{ +0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{ +0.5f, +0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{ -0.5f, +0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+    { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+    { { +0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+    { { +0.5f, +0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
+    { { -0.5f, +0.5f, 0.0f }, { 0.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } }
 };
 
 std::vector<uint32_t> indices = {
@@ -36,6 +36,7 @@ struct UniformBufferObject {
 
 int main(int argc, char** argv) {
 #ifdef DEBUG_ENV
+#pragma message "Building in debug mode."
     printf("Launching main in test mode...\n\n");
 #endif
     if (!glfwInit()) {
@@ -44,14 +45,18 @@ int main(int argc, char** argv) {
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan main", nullptr, nullptr);
-    VkApplicationInfo appInfo{};
+    VkApplicationInfo appInfo {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Vulkan test of some sort";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "None yet";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
-    ctx = new VulkanContext(false, true, appInfo, window);
+#ifdef DEBUG_ENV
+    ctx = new VulkanContext(true, true, appInfo, window);
+#else
+    ctx = new VulkanContext(false, false, appInfo, window);
+#endif
 
     // Relative shader loading
     std::filesystem::path shader_location_path = getExecutableLocation(argv[0], false).append("shaders");
@@ -85,11 +90,11 @@ int main(int argc, char** argv) {
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     createBuffer(ctx, sizeof(UniformBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, properties, &uniformBuffer);
 
-    VkDescriptorBufferInfo bufferInfo{};
+    VkDescriptorBufferInfo bufferInfo {};
     bufferInfo.buffer = uniformBuffer.buffer;
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferObject);
-    VkWriteDescriptorSet descriptorWrites{};
+    VkWriteDescriptorSet descriptorWrites {};
     descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptorWrites.dstSet = dsa->descriptorSets[0];
     descriptorWrites.dstBinding = 0;
@@ -101,7 +106,7 @@ int main(int argc, char** argv) {
     vkUpdateDescriptorSets(ctx->device, 1, &descriptorWrites, 0, nullptr);
 
     {
-        VkCommandBufferAllocateInfo allocInfo{};
+        VkCommandBufferAllocateInfo allocInfo {};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -119,7 +124,7 @@ int main(int argc, char** argv) {
             vkResetFences(ctx->device, 1, &inFlightFence);
             SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(imageAvailableSemaphore);
             vkResetCommandBuffer(commandBuffer, 0);
-            VkCommandBufferBeginInfo beginInfo{};
+            VkCommandBufferBeginInfo beginInfo {};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             beginInfo.flags = 0;
             beginInfo.pInheritanceInfo = nullptr;
@@ -143,7 +148,7 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Failed to record command buffer.");
             }
 
-            UniformBufferObject ubo{};
+            UniformBufferObject ubo {};
             ubo.model = glm::rotate(glm::mat4(1.0f), (float)getElapsedSeconds(start_time_point) * glm::radians(90.0f), glm::vec3(0, 0, 1));
             ubo.view = glm::lookAt(glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
             ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
@@ -152,7 +157,7 @@ int main(int argc, char** argv) {
             memcpy(data, &ubo, sizeof(UniformBufferObject));
             uniformBuffer.chonklet.unmapMemory(ctx);
 
-            VkSubmitInfo submitInfo{};
+            VkSubmitInfo submitInfo {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
             submitInfo.waitSemaphoreCount = 1;
@@ -165,7 +170,7 @@ int main(int argc, char** argv) {
             if (vkQueueSubmit(ctx->vk_queues.graphics, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to submit command buffer");
             }
-            VkPresentInfoKHR presentInfo{};
+            VkPresentInfoKHR presentInfo {};
             presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             presentInfo.waitSemaphoreCount = 1;
             presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
