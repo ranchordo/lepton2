@@ -9,6 +9,7 @@ using namespace lepton2::vulkancore;
 
 // TODO: Investigate push_back and see if we can switch to static sizing in some places (namely RenderState et al.)
 // TODO: Investigate persistent mapping
+// TODO: See if it works with unicode paths
 
 VulkanContext* ctx;
 
@@ -20,7 +21,7 @@ std::vector<Vertex> vertices = {
 };
 
 std::vector<uint32_t> indices = {
-    1, 0, 3, 1, 3, 2
+    3, 0, 1, 2, 3, 1
 };
 
 HostObjectData hostData = { vertices, indices };
@@ -33,7 +34,10 @@ struct UniformBufferObject {
     glm::mat4 proj;
 } ubo;
 
-int main() {
+int main(int argc, char** argv) {
+#ifdef DEBUG_ENV
+    printf("Launching main in test mode...\n\n");
+#endif
     if (!glfwInit()) {
         throw std::runtime_error("Failed GLFW initialization.");
     }
@@ -47,7 +51,14 @@ int main() {
     appInfo.pEngineName = "None yet";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
-    ctx = new VulkanContext(true, true, appInfo, window);
+    ctx = new VulkanContext(false, true, appInfo, window);
+
+    // Relative shader loading
+    std::filesystem::path shader_location_path = getExecutableLocation(argv[0], false).append("shaders");
+    const char* shader_location = shader_location_path.c_str();
+    char* new_shader_location = (char*)malloc(strlen(shader_location) + 1);
+    strcpy(new_shader_location, shader_location);
+    shaders_spirv_load_dir = new_shader_location;
 
     RenderGraph renderGraph(ctx);
     RenderGraphNode* node = renderGraph.getTerminatingNode();
@@ -61,7 +72,7 @@ int main() {
     dsa->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
 
-    PipelineInfo pipelineInfo("shader", node, dsa->getSingularLayout(), VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+    PipelineInfo pipelineInfo("shader", node, dsa->getSingularLayout());
     renderState->addPipeline("shader", pipelineInfo);
 
     DeviceObjectData devData(ctx, hostData);
@@ -119,12 +130,12 @@ int main() {
 
             renderState->bind(commandBuffer, swapChainFrame);
             renderState->getPipeline("shader")->bind(commandBuffer);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderState->getPipeline("shader")->getPipelineLayout(), 0, 1, dsa->descriptorSets.data(), 0, nullptr);
 
             devData.bind(commandBuffer, 0);
 
             ctx->swapChain.updateViewportScissor(commandBuffer);
 
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderState->getPipeline("shader")->getPipelineLayout(), 0, 1, dsa->descriptorSets.data(), 0, nullptr);
             vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
             vkCmdEndRenderPass(commandBuffer);
 

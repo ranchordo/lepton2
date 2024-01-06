@@ -7,7 +7,7 @@
 using namespace lepton2::vulkancore;
 
 namespace lepton2::vulkancore {
-    const char* shaders_spirv_load_dir = "shaders_build";
+    const char* shaders_spirv_load_dir = "shaders";
 }
 
 PipelineInfo::PipelineInfo(const char* _shaderName, RenderGraphNode* _node,

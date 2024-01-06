@@ -1,28 +1,60 @@
-CFLAGS = -std=c++17 -O3
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+.PHONY: test clean build_mac build_linux
+
+# Base build procedure #
+
+BASECFLAGS = -std=c++17 -O3
+BASELDFLAGS = -lglfw -lvulkan
 
 SOURCES = $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)
-OBJECTS = $(subst src,build,$(SOURCES:.cpp=.o))
+OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
 
-.PHONY: test clean
+build-base: $(OBJECTS)
+	mkdir -p $(shell dirname "$(OUTPUT)")
+	clang++ $(CFLAGS) -o $(OUTPUT) $(OBJECTS) $(LDFLAGS)
 
-VulkanMain: $(OBJECTS)
-	g++ $(CFLAGS) -o VulkanMain $(OBJECTS) $(LDFLAGS)
-
-$(OBJECTS): build/%.o: src/%.cpp
+$(OBJECTS): build/o/%.o: src/%.cpp
 	@echo Compiling $< to $@...
 	mkdir -p $(shell dirname "$@")
-	g++ $(CFLAGS) $< -c -o $@
-
-test: clean VulkanMain shaders_cmp
-	./VulkanMain
+	clang++ $(CFLAGS) $< -c -o $@
 
 shaders_cmp: shaders/shader.vert shaders/shader.frag
-	mkdir -p shaders_build
-	glslc shaders/shader.vert -o shaders_build/shader.vert.spv
-	glslc shaders/shader.frag -o shaders_build/shader.frag.spv
+	mkdir -p build/output/shaders
+	glslc shaders/shader.vert -o build/output/shaders/shader.vert.spv
+	glslc shaders/shader.frag -o build/output/shaders/shader.frag.spv
 
 clean:
-	rm -f VulkanMain
-	rm -rf shaders_build
 	rm -rf build
+
+# Test native build #
+
+test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV
+test: LDFLAGS = $(BASELDFLAGS)
+test: OUTPUT = build/output/lepton2_main
+test: clean build-base shaders_cmp
+	@echo Launching $(OUTPUT)...
+	@./$(OUTPUT)
+
+# Mac OSX build #
+# FIXME: Only works on arm64-based cpu for now, need to update sysroot and unify binaries.
+
+build_mac_extract_sysroot:
+	mkdir -p build
+	tar -xf build-resources/osx_sysroot.tar.gz -C build/
+
+build_mac: CFLAGS = $(BASECFLAGS) -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
+build_mac: LDFLAGS = $(BASELDFLAGS) -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
+build_mac: OUTPUT = build/output/lepton2_main
+build_mac: clean build_mac_extract_sysroot build-base shaders_cmp
+	mkdir -p build/output/vulkan/icd.d
+	cp build-resources/MoltenVK_icd.json build/output/vulkan/icd.d/
+	cp build-resources/libMoltenVK.dylib build/output/libMoltenVK.dylib
+	cp build-resources/libvulkan.dylib build/output/libvulkan.1.dylib
+	@echo "Build completed in build/output/."
+
+# Linux build #
+
+build_linux: CFLAGS = $(BASECFLAGS)
+build_linux: LDFLAGS = $(BASELDFLAGS)
+build_linux: OUTPUT = build/output/lepton2_main
+build_linux: clean build-base shaders_cmp
+	@echo "Build completed in build/output/."

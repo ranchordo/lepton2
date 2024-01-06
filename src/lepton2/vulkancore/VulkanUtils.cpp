@@ -189,6 +189,7 @@ namespace lepton2::vulkancore {
     std::vector<char> readFile(const std::string& filename) {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);
         if (!file.is_open()) {
+            printf("Attempted to open file %s\n", filename.c_str());
             throw std::runtime_error("Could not open miscellaneous file for reading.");
         }
         size_t fsize = (size_t)file.tellg();
@@ -220,13 +221,21 @@ namespace lepton2::vulkancore {
         return ret;
     }
 
-    std::chrono::system_clock::time_point startTiming() {
-        return std::chrono::high_resolution_clock::now();
+    std::chrono::steady_clock::time_point startTiming() {
+        return std::chrono::steady_clock::now();
     }
 
-    double getElapsedSeconds(std::chrono::system_clock::time_point time_point) {
-        std::chrono::system_clock::time_point now = startTiming();
+    double getElapsedSeconds(std::chrono::steady_clock::time_point time_point) {
+        auto now = startTiming();
         std::chrono::duration<double> interval = now - time_point;
         return interval.count();
+    }
+
+    std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute) {
+        std::filesystem::path relative_path = std::filesystem::path(argv0).parent_path();
+        if (!force_absolute) {
+            return relative_path;
+        }
+        return std::filesystem::absolute(relative_path);
     }
 }

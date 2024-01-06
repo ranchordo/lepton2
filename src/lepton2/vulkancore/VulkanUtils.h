@@ -4,6 +4,10 @@
 // without whose work this library would not be remotely similar.
 // Their c++ work, from which vulkancore is based, is licensed as CC0 v1.0.
 
+#if defined(__APPLE__)
+#include <MoltenVK/mvk_vulkan.h>
+#endif
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLM_FORCE_RADIANS
@@ -15,13 +19,12 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include <vulkan/vulkan.h>
-
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -86,6 +89,7 @@ namespace lepton2::vulkancore {
     extern std::vector<char> readFile(const std::string& filename);
     extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
     extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
-    extern std::chrono::system_clock::time_point startTiming();
-    extern double getElapsedSeconds(std::chrono::system_clock::time_point time_point);
+    extern std::chrono::steady_clock::time_point startTiming();
+    extern double getElapsedSeconds(std::chrono::steady_clock::time_point time_point);
+    extern std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute);
 }

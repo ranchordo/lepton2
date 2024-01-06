@@ -11,6 +11,10 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+static void glfwErrorCallback(int code, const char* message) {
+    printf("GLFW error, code %d: \"%s\"\n", code, message);
+}
+
 bool checkValidationLayerSupport() {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -54,6 +58,7 @@ void buildDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& msgCreate
 }
 
 void VulkanContext::createInstance(VkApplicationInfo appInfo) {
+    glfwSetErrorCallback(&glfwErrorCallback);
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
