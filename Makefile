@@ -1,4 +1,4 @@
-.PHONY: test clean build_mac build_linux
+.PHONY: test clean all_shaders build_mac build_linux
 
 # Base build procedure #
 
@@ -7,6 +7,9 @@ BASELDFLAGS = -lglfw -lvulkan
 
 SOURCES = $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)
 OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
+
+SHADER_SOURCES = $(wildcard shaders_src/*.frag) $(wildcard shaders_src/*.vert) $(wildcard shaders_src/*/*.frag) $(wildcard shaders_src/*/*.vert)
+SHADER_SPIRV = $(subst shaders_src,build/output/shaders,$(addsuffix .spv,$(SHADER_SOURCES)))
 
 build-base: $(OBJECTS)
 	mkdir -p $(shell dirname "$(OUTPUT)")
@@ -17,10 +20,13 @@ $(OBJECTS): build/o/%.o: src/%.cpp
 	mkdir -p $(shell dirname "$@")
 	clang++ $(CFLAGS) $< -c -o $@
 
-shaders_cmp: shaders/shader.vert shaders/shader.frag
-	mkdir -p build/output/shaders
-	glslc shaders/shader.vert -o build/output/shaders/shader.vert.spv
-	glslc shaders/shader.frag -o build/output/shaders/shader.frag.spv
+$(SHADER_SPIRV): build/output/shaders/%.spv: shaders_src/%
+	@echo Compiling $< to $@...
+	mkdir -p $(shell dirname "$@")
+	glslc $< -o $@
+
+all_shaders: $(SHADER_SPIRV)
+	@echo All shaders built.
 
 clean:
 	rm -rf build
@@ -30,7 +36,7 @@ clean:
 test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV
 test: LDFLAGS = $(BASELDFLAGS)
 test: OUTPUT = build/output/lepton2_main
-test: clean build-base shaders_cmp
+test: clean build-base $(SHADER_SPIRV)
 	@echo Launching $(OUTPUT)...
 	@./$(OUTPUT)
 
@@ -44,7 +50,7 @@ build_mac_extract_sysroot:
 build_mac: CFLAGS = $(BASECFLAGS) -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
 build_mac: LDFLAGS = $(BASELDFLAGS) -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
 build_mac: OUTPUT = build/output/lepton2_main
-build_mac: clean build_mac_extract_sysroot build-base shaders_cmp
+build_mac: clean build_mac_extract_sysroot build-base $(SHADER_SPIRV)
 	mkdir -p build/output/vulkan/icd.d
 	cp build-resources/MoltenVK_icd.json build/output/vulkan/icd.d/
 	cp build-resources/libMoltenVK.dylib build/output/libMoltenVK.dylib
@@ -56,5 +62,5 @@ build_mac: clean build_mac_extract_sysroot build-base shaders_cmp
 build_linux: CFLAGS = $(BASECFLAGS)
 build_linux: LDFLAGS = $(BASELDFLAGS)
 build_linux: OUTPUT = build/output/lepton2_main
-build_linux: clean build-base shaders_cmp
+build_linux: clean build-base $(SHADER_SPIRV)
 	@echo "Build completed in build/output/."
