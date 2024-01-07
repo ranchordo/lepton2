@@ -1,0 +1,22 @@
+name: C/C++ CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Clang++-17
+      run: wget https://apt.llvm.org/llvm.sh && chmod u+x ./llvm.sh && sudo ./llvm.sh 17
+    - name: Use update alternatives
+      run: sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 1
+    - name: Make
+      run: make build_linux
