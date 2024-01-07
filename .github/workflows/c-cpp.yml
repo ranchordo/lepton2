@@ -14,9 +14,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install dependencies
+      run: sudo apt install vulkan-tools libvulkan-dev vulkan-validationlayers-dev spirv-tools libglfw3-dev libglm-dev
     - name: Install Clang++-17
-      run: wget https://apt.llvm.org/llvm.sh && chmod u+x ./llvm.sh && sudo ./llvm.sh 17
-    - name: Use update alternatives
+      run: wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh && chmod u+x /tmp/llvm.sh && sudo /tmp/llvm.sh 17 && rm /tmp/llvm.sh
+    - name: Use update alternatives to provide clang++-17
       run: sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 1
+    - name: Install glslc
+      run: curl -s $(curl -s https://storage.googleapis.com/shaderc/badges/build_link_linux_clang_release.html | sed -n "s/^.*url=\(.*\)\".*$/\1/p") --output - | tar -C /tmp -xzvf - --transform='s,.*/,,' install/bin/glslc && sudo mv /tmp/glslc /usr/local/bin/glslc
     - name: Make
       run: make build_linux
