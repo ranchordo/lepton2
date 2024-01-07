@@ -2,7 +2,9 @@
 
 #include "VulkanContext.h"
 
+#ifdef DEBUG_ENV
 // #define DEBUG_MEMORY_MANAGER
+#endif
 
 using namespace lepton2::vulkancore;
 
@@ -72,7 +74,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
 #ifdef DEBUG_MEMORY_MANAGER
         printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus->memory);
 #endif
-        std::vector<MemoryChonkus*> newChonki = { newChonkus };
+        std::vector<MemoryChonkus*> newChonki = {newChonkus};
         std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
         lookup = newChonki;
         selectedChonkus = newChonkus;

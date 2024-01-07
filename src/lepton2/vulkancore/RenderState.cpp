@@ -2,7 +2,9 @@
 
 using namespace lepton2::vulkancore;
 
-RenderGraphNode::RenderGraphNode() {}
+RenderGraphNode::RenderGraphNode() {
+    this->isTerminatingNode = false;
+}
 
 RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) {
     if (!isTerminatingNode) {
@@ -33,6 +35,7 @@ void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo,
     if (this->isTerminatingNode) {
         throw std::runtime_error("Color attachments of presenting/terminating nodes in the RenderGraph are predefined.");
     }
+    rticInfo.use_swapchain = false;
     VkAttachmentDescription desc{};
     desc.format = rticInfo.format;
     desc.samples = rticInfo.samples;
@@ -41,7 +44,7 @@ void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo,
     desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     ColorAttachmentInfo info;
     info.desc = desc;
     info.rticInfo = rticInfo;
@@ -49,36 +52,43 @@ void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo,
     this->colorAttachments.push_back(info);
 }
 
-void RenderGraphNode::connectToNode(uint32_t color_output, RenderGraphNode* node) {
-    if (this->isTerminatingNode) {
-        throw std::runtime_error("Cannot connect the terminating node anywhere.");
+void RenderGraphNode::connectFromNode(RenderGraphNode* src, uint32_t color_output, uint32_t inputAttachmentIndex) {
+    if (src->isTerminatingNode) {
+        throw std::runtime_error("Cannot connect from a terminating node.");
     }
-    if (color_output >= this->colorAttachments.size()) {
+    if (color_output >= src->colorAttachments.size()) {
         throw std::runtime_error("Color output index doesn't exist for this node.");
     }
-    std::pair<uint32_t, RenderGraphNode*> opair(color_output, node);
-    std::pair<uint32_t, RenderGraphNode*> ipair(color_output, this);
-    this->outputs.push_back(opair);
-    node->inputs.push_back(ipair);
+    // std::pair<uint32_t, RenderGraphNode*> opair(color_output, this);
+    std::pair<uint32_t, RenderGraphNode*> ipair(color_output, src);
+    // src->outputs.push_back(opair);
+    this->inputs[inputAttachmentIndex] = ipair;
+}
+
+void RenderGraphNode::requestDepthAsInput(uint32_t index) {
+    this->depthInputRequest = index;
 }
 
 void RenderGraphNode::destroy_back(VulkanContext* ctx) {
-    // So far nothing
+    for (auto const& p : this->pipelines) {
+        p.second->destroy(ctx);
+        delete p.second;
+    }
+    this->pipelines.clear();
 }
 
 RenderGraphNode* RenderGraph::buildNewNode() {
     RenderGraphNode* node = new RenderGraphNode();
-    node->nodeIndex = this->nodes.size();
     this->nodes.push_back(node);
     return node;
 }
 
-void RenderState::addPipeline(std::string key, PipelineInfo cInfo) {
-    GraphicsPipeline* pipeline = new GraphicsPipeline(this->ctx, this->renderPass, cInfo);
+void RenderGraphNode::addPipeline(RenderState* renderState, std::string key, PipelineInfo cInfo) {
+    GraphicsPipeline* pipeline = new GraphicsPipeline(renderState->ctx, this->nodeIndex, renderState->renderPass, cInfo);
     this->pipelines[key] = pipeline;
 }
 
-GraphicsPipeline* RenderState::getPipeline(std::string key) {
+GraphicsPipeline* RenderGraphNode::getPipeline(std::string key) {
     return this->pipelines[key];
 }
 
@@ -87,7 +97,7 @@ void RenderState::bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFr
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = renderPass;
     renderPassInfo.framebuffer = swapChainFrame.framebuffer->framebuffer;
-    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = ctx->swapChain.swapChainExtent;
 
     std::vector<VkClearValue> clearValues;
@@ -106,24 +116,55 @@ void RenderState::destroy_back(VulkanContext* ctx) {
     if (this->renderPass != VK_NULL_HANDLE) {
         vkDestroyRenderPass(ctx->device, this->renderPass, nullptr);
     }
-    for (auto const& p : this->pipelines) {
-        p.second->destroy(ctx);
-        delete p.second;
-    }
-    this->pipelines.clear();
 }
 
 RenderGraph::RenderGraph(VulkanContext* ctx) {
     this->ctx = ctx;
     this->terminator = new RenderGraphNode(ctx, true);
-    this->terminator->nodeIndex = this->nodes.size();
     this->nodes.push_back(this->terminator);
 }
 
+#define NODE_MARK_TEMPORARY 1
+#define NODE_MARK_EXHAUSTED 2
+
+void RenderGraphNode::topologicalSort(std::vector<RenderGraphNode*>* orderedNodes) {
+    if (this->markings & NODE_MARK_EXHAUSTED) {
+        return;
+    }
+    if (this->markings & NODE_MARK_TEMPORARY) {
+        throw std::runtime_error("Topological sort: cycle detected in render graph.");
+    }
+    this->markings |= NODE_MARK_TEMPORARY;
+    for (auto pair : this->inputs) {
+        pair.second.second->topologicalSort(orderedNodes);
+    }
+    this->markings &= (~NODE_MARK_TEMPORARY);
+    this->markings |= NODE_MARK_EXHAUSTED;
+    orderedNodes->push_back(this);
+}
+
 RenderState* RenderGraph::buildRenderState() {
+    // Commence topological sort
+    for (RenderGraphNode* node : this->nodes) {
+        node->markings = 0;
+    }
+    std::vector<RenderGraphNode*> orderedNodes;
+    while (orderedNodes.size() < this->nodes.size()) {
+        for (RenderGraphNode* node : this->nodes) {
+            if (!(node->markings & NODE_MARK_EXHAUSTED)) {
+                node->topologicalSort(&orderedNodes);
+            }
+        }
+    }
+    this->nodes = orderedNodes;
+    // Alright, carry on
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        this->nodes[i]->nodeIndex = i;
+    }
     RenderState* finalState = new RenderState();
     std::vector<VkAttachmentDescription> attachments;
 
+    // Depth/stencil creation
     RenderTargetImageCreationInfo depthStencilCreationInfo{};
     depthStencilCreationInfo.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
     depthStencilCreationInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -132,6 +173,7 @@ RenderState* RenderGraph::buildRenderState() {
     depthStencilCreationInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     depthStencilCreationInfo.aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
     depthStencilCreationInfo.use_swapchain = false;
+    depthStencilCreationInfo.creationTracker = nullptr;
     VkAttachmentDescription depthStencilAttachment{};
     depthStencilAttachment.format = depthStencilCreationInfo.format;
     depthStencilAttachment.samples = depthStencilCreationInfo.samples;
@@ -145,12 +187,16 @@ RenderState* RenderGraph::buildRenderState() {
     attachments.push_back(depthStencilAttachment);
     finalState->rticInfos.push_back(depthStencilCreationInfo);
     finalState->clearValuePtrs.push_back(&finalState->depthStencilClearValue);
+    // Rest of attachments for each node
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
         node->subpassInfo.colorAttachmentReferences.resize(node->colorAttachments.size());
         for (uint32_t i = 0; i < node->colorAttachments.size(); i++) {
             node->subpassInfo.colorAttachmentReferences[i].attachment = attachments.size();
             node->subpassInfo.colorAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            if (!node->colorAttachments[i].rticInfo.use_swapchain) {
+                node->colorAttachments[i].rticInfo.creationTracker = &node->colorAttachments[i].swapChainCreations;
+            }
             finalState->rticInfos.push_back(node->colorAttachments[i].rticInfo);
             finalState->clearValuePtrs.push_back(&node->colorAttachments[i].clearValue);
             attachments.push_back(node->colorAttachments[i].desc);
@@ -159,6 +205,7 @@ RenderState* RenderGraph::buildRenderState() {
         node->subpassInfo.depthStencilAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
     // Now all nodes have their VkAttachmentReferences built
+    // Build subpass descriptions:
     std::vector<VkSubpassDescription> subpasses;
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
@@ -166,28 +213,39 @@ RenderState* RenderGraph::buildRenderState() {
         subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpassDescription.colorAttachmentCount = node->colorAttachments.size();
         subpassDescription.pColorAttachments = node->subpassInfo.colorAttachmentReferences.data();
-        for (std::pair<uint32_t, RenderGraphNode*> p : node->inputs) {
-            VkAttachmentReference inputAttachmentReference = p.second->subpassInfo.colorAttachmentReferences[p.first];
-            node->subpassInfo.inputAttachmentReferences.push_back(inputAttachmentReference);
+        uint32_t inputAttachmentSize = 0;
+        for (std::pair<uint32_t, std::pair<uint32_t, RenderGraphNode*>> pair : node->inputs) {
+            if ((pair.first + 1) > inputAttachmentSize) {
+                inputAttachmentSize = pair.first + 1;
+            }
+        }
+        node->subpassInfo.inputAttachmentReferences.resize(inputAttachmentSize);
+        for (std::pair<uint32_t, std::pair<uint32_t, RenderGraphNode*>> pair : node->inputs) {
+            uint32_t inputAttachment = pair.second.second->subpassInfo.colorAttachmentReferences[pair.second.first].attachment;
+            node->subpassInfo.inputAttachmentReferences[pair.first] = {inputAttachment, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        }
+        if (node->depthInputRequest != UINT32_MAX) {
+            node->subpassInfo.inputAttachmentReferences[node->depthInputRequest] = {depthStencilAttachmentIndex, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL};
         }
         subpassDescription.inputAttachmentCount = node->subpassInfo.inputAttachmentReferences.size();
         subpassDescription.pInputAttachments = node->subpassInfo.inputAttachmentReferences.data();
         subpassDescription.pDepthStencilAttachment = &node->subpassInfo.depthStencilAttachmentReference;
         subpasses.push_back(subpassDescription);
     }
+    // Build the render pass creation info
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = attachments.size();
     renderPassInfo.pAttachments = attachments.data();
     renderPassInfo.subpassCount = subpasses.size();
     renderPassInfo.pSubpasses = subpasses.data();
-
+    // Construct subpass dependencies
     std::vector<VkSubpassDependency> subpassDependencies;
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
-        for (std::pair<uint32_t, RenderGraphNode*> p : node->inputs) {
+        for (std::pair<uint32_t, std::pair<uint32_t, RenderGraphNode*>> p : node->inputs) {
             VkSubpassDependency dependency{};
-            dependency.srcSubpass = p.second->nodeIndex;
+            dependency.srcSubpass = p.second.second->nodeIndex;
             dependency.dstSubpass = node->nodeIndex;
             dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -197,10 +255,9 @@ RenderState* RenderGraph::buildRenderState() {
             subpassDependencies.push_back(dependency);
         }
     }
-
     renderPassInfo.dependencyCount = subpassDependencies.size();
     renderPassInfo.pDependencies = subpassDependencies.data();
-
+    // Build render pass, pass to final state
     VkRenderPass* dstRenderPass = &finalState->renderPass;
     if (vkCreateRenderPass(ctx->device, &renderPassInfo, nullptr, dstRenderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass.");

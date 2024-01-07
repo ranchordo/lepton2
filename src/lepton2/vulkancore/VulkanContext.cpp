@@ -5,11 +5,9 @@ using namespace lepton2::vulkancore;
 #define VALIDATION_MESSAGE_TYPE_MASK (~VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
 
 const std::vector<const char*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"
-};
+    "VK_LAYER_KHRONOS_validation"};
 const std::vector<const char*> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 static void glfwErrorCallback(int code, const char* message) {
     printf("GLFW error, code %d: \"%s\"\n", code, message);
@@ -46,13 +44,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 
 void buildDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& msgCreateInfo) {
     msgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    msgCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-        | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    msgCreateInfo.messageType = (VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-        | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-        | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-        & VALIDATION_MESSAGE_TYPE_MASK;
+    msgCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    msgCreateInfo.messageType = (VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) & VALIDATION_MESSAGE_TYPE_MASK;
     msgCreateInfo.pfnUserCallback = debugCallback;
     msgCreateInfo.pUserData = nullptr;
 }
@@ -133,7 +126,7 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-    std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+    std::unordered_set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
     for (const VkExtensionProperties& extension : availableExtensions) {
         requiredExtensions.erase(extension.extensionName);
     }
@@ -229,11 +222,10 @@ void VulkanContext::createLogicalDevice() {
     QueueFamilyIndices indices = this->findQueueFamilies(this->physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = {
+    std::unordered_set<uint32_t> uniqueQueueFamilies = {
         indices.graphicsFamily.value(),
-        indices.presentFamily.value()
-    };
-    float queuePriorities[1] = { 1.0f };
+        indices.presentFamily.value()};
+    float queuePriorities[1] = {1.0f};
     for (uint32_t queueFamily : uniqueQueueFamilies) {
         VkDeviceQueueCreateInfo queueCreateInfo{};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -286,8 +278,7 @@ void VulkanContext::buildAllCommandPools() {
     }
     // Transient graphics
     {
-        VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
-            | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         uint32_t queueFamilyIndex = indices.graphicsFamily.value();
         this->buildCommandPool(flags, queueFamilyIndex, &this->vk_command_pools.transientGraphics);
     }
@@ -303,7 +294,7 @@ void VulkanContext::destroy_back(VulkanContext* ctx) {
     if (this->vk_command_pools.transientGraphics != VK_NULL_HANDLE) {
         vkDestroyCommandPool(this->device, vk_command_pools.transientGraphics, nullptr);
     }
-    
+
     if (this->device != VK_NULL_HANDLE) {
         vkDestroyDevice(this->device, nullptr);
     }

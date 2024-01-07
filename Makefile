@@ -2,7 +2,7 @@
 
 # Base build procedure #
 
-BASECFLAGS = -std=c++17 -O3
+BASECFLAGS = -std=c++17 -g
 BASELDFLAGS = -lglfw -lvulkan
 
 SOURCES = $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)

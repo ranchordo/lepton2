@@ -1,4 +1,5 @@
 #include "VulkanObjects.h"
+
 #include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
@@ -34,8 +35,13 @@ void VulkanBuffer::findMemory(VulkanContext* ctx, VkMemoryPropertyFlags properti
     VkMemoryRequirements req;
     vkGetBufferMemoryRequirements(ctx->device, this->buffer, &req);
     uint32_t memoryTypeIndex = findMemoryType(ctx, req.memoryTypeBits, properties);
-    this->chonklet = ctx->allocManager.findMemory(req.size, memoryTypeIndex);
-    vkBindBufferMemory(ctx->device, this->buffer, this->chonklet.chonkus->memory, this->chonklet.offset);
+    this->chonklet = ctx->allocManager.findMemory(req.size + req.alignment, memoryTypeIndex);
+    VkDeviceSize offset = this->chonklet.offset;
+    if (req.alignment != 0) {
+        // *Evil precision magic intensifies* //
+        offset = ((offset + req.alignment - 1) / req.alignment) * req.alignment;
+    }
+    vkBindBufferMemory(ctx->device, this->buffer, this->chonklet.chonkus->memory, offset);
 }
 
 void VulkanBuffer::destroy_back(VulkanContext* ctx) {

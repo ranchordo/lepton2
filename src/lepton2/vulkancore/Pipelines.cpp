@@ -1,22 +1,21 @@
 #include "Pipelines.h"
 
-#include "VulkanContext.h"
 #include "ObjectData.h"
 #include "RenderState.h"
+#include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
 
 namespace lepton2::vulkancore {
-    const char* shaders_spirv_load_dir = "shaders";
+const char* shaders_spirv_load_dir = "shaders";
 }
 
-PipelineInfo::PipelineInfo(const char* _shaderName, RenderGraphNode* _node,
-    std::vector<VkDescriptorSetLayout> _descriptorSetLayouts,
-    VkSampleCountFlagBits _samples, VkBool32 _useStencilTesting,
-    VkStencilOpState _stencilState, VkPolygonMode _polygonMode,
-    VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
+PipelineInfo::PipelineInfo(const char* _shaderName,
+                           std::vector<VkDescriptorSetLayout> _descriptorSetLayouts,
+                           VkSampleCountFlagBits _samples, VkBool32 _useStencilTesting,
+                           VkStencilOpState _stencilState, VkPolygonMode _polygonMode,
+                           VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
     this->shaderName = _shaderName;
-    this->subpassIndex = _node->getSubpassIndex();
     this->descriptorSetLayouts = _descriptorSetLayouts;
     this->samples = _samples;
     this->useStencilTesting = _useStencilTesting;
@@ -38,8 +37,7 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
     return shaderModule;
 }
 
-GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, PipelineInfo cInfo) {
-
+GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass, PipelineInfo cInfo) {
     size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
     char filename_buffer[combined_length + 1];
     snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
@@ -63,13 +61,11 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, 
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {
         vertShaderStageInfo,
-        fragShaderStageInfo
-    };
+        fragShaderStageInfo};
 
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
+        VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicState.dynamicStateCount = (uint32_t)dynamicStates.size();
@@ -169,7 +165,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, VkRenderPass renderPass, 
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = renderPass;
-    pipelineInfo.subpass = cInfo.subpassIndex;
+    pipelineInfo.subpass = subpassIndex;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 

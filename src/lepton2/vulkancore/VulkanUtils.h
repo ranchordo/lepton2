@@ -12,12 +12,7 @@
 #include <GLFW/glfw3.h>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/mat4x4.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
+#include <stdio.h>
 
 #include <algorithm>
 #include <array>
@@ -26,12 +21,18 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <map>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <list>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
-#include <stdio.h>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
@@ -41,55 +42,86 @@
         EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
     }
 
-#define CHECK_DESTRUCTION(status) { if (this->destroyed) { return status; }}
-#define CHECK_DESTRUCTION_VOID() { if (this->destroyed) { return; }}
+#define CHECK_DESTRUCTION(status) \
+    {                             \
+        if (this->destroyed) {    \
+            return status;        \
+        }                         \
+    }
+#define CHECK_DESTRUCTION_VOID() \
+    {                            \
+        if (this->destroyed) {   \
+            return;              \
+        }                        \
+    }
 
 // Don't ask.
-#define SEPPUKU() { *(int*)0 = 0; }
+#define SEPPUKU() \
+    { *(int*)0 = 0; }
 
 namespace lepton2::vulkancore {
 
-    class VulkanContext;
-    class VulkanImage;
-    class VulkanBuffer;
-    struct RenderTargetImageCreationInfo;
+class VulkanContext;
+class VulkanImage;
+class VulkanBuffer;
+struct RenderTargetImageCreationInfo;
 
-    class DeletableVulkanResource {
-    public:
-        virtual void destroy_back(VulkanContext* ctx) = 0;
-        void destroy(VulkanContext* ctx) {
-            if (!destroyed) destroy_back(ctx);
-            this->destroyed = true;
+class DeletableVulkanResource {
+   public:
+    virtual void destroy_back(VulkanContext* ctx) = 0;
+    void destroy(VulkanContext* ctx) {
+        if (!destroyed) {
+            for (std::pair<bool, DeletableVulkanResource*> pair : this->linked) {
+                pair.second->destroy(ctx);
+                if (pair.first) {
+                    delete pair.second;
+                }
+            }
+            destroy_back(ctx);
         }
-    protected:
-        bool destroyed = false;
-    };
+        this->destroyed = true;
+    }
+    void addLinked(DeletableVulkanResource* linked, bool deleteptr) {
+        std::pair<bool, DeletableVulkanResource*> pair(deleteptr, linked);
+        this->linked.push_back(pair);
+    }
+    virtual ~DeletableVulkanResource() {}
 
-    enum ImageLayoutTransitionMode {
-        ILTM_UNDEF_2_XFER_DST,
-        ILTM_XFER_DST_2_FRAG_RO
-    };
+   protected:
+    bool destroyed = false;
+    std::vector<std::pair<bool, DeletableVulkanResource*>> linked;
+};
 
-    extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-    extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage,
-        VkMemoryPropertyFlags properties, VulkanBuffer* buffer);
-    extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height,
-        VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits samples,
-        VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
-    extern void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
-        RenderTargetImageCreationInfo* rticInfo, VulkanImage* image);
-    extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
-    extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
-    extern void transitionImageLayout(VulkanContext* ctx, VkImage image, VkFormat format, VkImageLayout oldLayout,
-        VkImageLayout newLayout, ImageLayoutTransitionMode iltm);
-    extern void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-    extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
-    extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
-        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
-    extern std::vector<char> readFile(const std::string& filename);
-    extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
-    extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
-    extern std::chrono::steady_clock::time_point startTiming();
-    extern double getElapsedSeconds(std::chrono::steady_clock::time_point time_point);
-    extern std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute);
-}
+class DeletablVulkanResourceTracker : public DeletableVulkanResource {
+   public:
+    void destroy_back(VulkanContext* ctx) override {}
+};
+
+enum ImageLayoutTransitionMode {
+    ILTM_UNDEFINED_TO_TRANSFER_DST,
+    ILTM_TRANSFER_DST_TO_SHADER_READ_ONLY,
+    ILTM_UNDEFINED_TO_SHADER_READ_ONLY
+};
+
+extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+extern void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usage,
+                         VkMemoryPropertyFlags properties, VulkanBuffer* buffer);
+extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height,
+                        VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits samples,
+                        VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
+extern void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
+                               RenderTargetImageCreationInfo* rticInfo, VulkanImage* image);
+extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
+extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
+extern void transitionImageLayout(VulkanContext* ctx, VulkanImage* image, ImageLayoutTransitionMode iltm);
+extern void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
+                       VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
+extern std::vector<char> readFile(const std::string& filename);
+extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
+extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
+extern std::chrono::steady_clock::time_point startTiming();
+extern double getElapsedSeconds(std::chrono::steady_clock::time_point time_point);
+extern std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute);
+}  // namespace lepton2::vulkancore

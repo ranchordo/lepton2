@@ -14,17 +14,23 @@ using namespace lepton2::vulkancore;
 VulkanContext* ctx;
 
 std::vector<Vertex> vertices = {
-    { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-    { { +0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-    { { +0.5f, +0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },
-    { { -0.5f, +0.5f, 0.0f }, { 0.0f, 1.0f, 1.0f }, { 0.0f, 1.0f } }
-};
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
-std::vector<uint32_t> indices = {
-    3, 0, 1, 2, 3, 1
-};
+std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
 
-HostObjectData hostData = { vertices, indices };
+std::vector<Vertex> vertices1 = {
+    {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+1.0f, +1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-1.0f, +1.0f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+
+std::vector<uint32_t> indices1 = {1, 0, 3, 1, 3, 2};
+
+HostObjectData hostData = {vertices, indices};
+HostObjectData hostData1 = {vertices1, indices1};
 
 VkCommandBuffer commandBuffer;
 
@@ -45,7 +51,7 @@ int main(int argc, char** argv) {
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan main", nullptr, nullptr);
-    VkApplicationInfo appInfo {};
+    VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Vulkan test of some sort";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -67,46 +73,53 @@ int main(int argc, char** argv) {
 
     RenderGraph renderGraph(ctx);
     RenderGraphNode* node = renderGraph.getTerminatingNode();
-    // Graph ends here, nothing to attach
+
+    RenderGraphNode* node1 = renderGraph.buildNewNode();
+    RenderTargetImageCreationInfo rticInfo{};
+    rticInfo.use_swapchain = false;
+    rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
+    rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    node1->addColorAttachment(rticInfo, true);
+    node->connectFromNode(node1, 0, 0);
 
     RenderState* renderState = renderGraph.buildRenderState();
     ctx->swapChain.buildSwapChain(renderState);
 
     DescriptorSetArray* dsa = new DescriptorSetArray();
-    dsa->addNewBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1);
+    DescriptorInfo dsab0{};
+    dsab0.bufferSize = sizeof(UniformBufferObject);
+    dsab0.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    dsa->addNewBinding(dsab0, VK_SHADER_STAGE_VERTEX_BIT, 1);
     dsa->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
 
-    PipelineInfo pipelineInfo("shader", node, dsa->getSingularLayout());
-    renderState->addPipeline("shader", pipelineInfo);
+    DescriptorSetArray* dsa1 = new DescriptorSetArray();
+    DescriptorInfo dsa1b0{};
+    dsa1b0.colorAttachmentInfo = &node1->getColorAttachments()->at(0);
+    dsa1b0.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+    dsa1->addNewBinding(dsa1b0, VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+    dsa1->buildDescriptorSetLayout(ctx);
+    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa1, ctx->swapChain.swapChainImages.size());
+
+    PipelineInfo pipelineInfo("shader", dsa->getSingularLayout(), VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+    node1->addPipeline(renderState, "shader", pipelineInfo);
+
+    PipelineInfo pipelineInfo1("prshader", dsa1->getSingularLayout(), VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+    node->addPipeline(renderState, "prshader", pipelineInfo1);
 
     DeviceObjectData devData(ctx, hostData);
+    DeviceObjectData devData1(ctx, hostData1);
 
     VkSemaphore imageAvailableSemaphore = createGenericSemaphore(ctx);
     VkSemaphore renderFinishedSemaphore = createGenericSemaphore(ctx);
     VkFence inFlightFence = createGenericFence(ctx, true);
 
-    VulkanBuffer uniformBuffer;
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    createBuffer(ctx, sizeof(UniformBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, properties, &uniformBuffer);
-
-    VkDescriptorBufferInfo bufferInfo {};
-    bufferInfo.buffer = uniformBuffer.buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(UniformBufferObject);
-    VkWriteDescriptorSet descriptorWrites {};
-    descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites.dstSet = dsa->descriptorSets[0];
-    descriptorWrites.dstBinding = 0;
-    descriptorWrites.dstArrayElement = 0;
-    descriptorWrites.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrites.descriptorCount = 1;
-    descriptorWrites.pBufferInfo = &bufferInfo;
-
-    vkUpdateDescriptorSets(ctx->device, 1, &descriptorWrites, 0, nullptr);
-
     {
-        VkCommandBufferAllocateInfo allocInfo {};
+        VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -124,7 +137,7 @@ int main(int argc, char** argv) {
             vkResetFences(ctx->device, 1, &inFlightFence);
             SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(imageAvailableSemaphore);
             vkResetCommandBuffer(commandBuffer, 0);
-            VkCommandBufferBeginInfo beginInfo {};
+            VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             beginInfo.flags = 0;
             beginInfo.pInheritanceInfo = nullptr;
@@ -133,14 +146,20 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Failed to begin recording command buffer.");
             }
 
+            ctx->swapChain.updateViewportScissor(commandBuffer);
+
             renderState->bind(commandBuffer, swapChainFrame);
-            renderState->getPipeline("shader")->bind(commandBuffer);
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderState->getPipeline("shader")->getPipelineLayout(), 0, 1, dsa->descriptorSets.data(), 0, nullptr);
+            node1->getPipeline("shader")->bind(commandBuffer);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node1->getPipeline("shader")->getPipelineLayout(), 0, 1, &dsa->singleDescriptorSets[0].descriptorSet, 0, nullptr);
 
             devData.bind(commandBuffer, 0);
 
-            ctx->swapChain.updateViewportScissor(commandBuffer);
+            vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
 
+            vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+            node->getPipeline("prshader")->bind(commandBuffer);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node->getPipeline("prshader")->getPipelineLayout(), 0, 1, &dsa1->singleDescriptorSets[swapChainFrame.index].descriptorSet, 0, nullptr);
+            devData1.bind(commandBuffer, 0);
             vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
             vkCmdEndRenderPass(commandBuffer);
 
@@ -148,18 +167,19 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Failed to record command buffer.");
             }
 
-            UniformBufferObject ubo {};
+            UniformBufferObject ubo{};
             ubo.model = glm::rotate(glm::mat4(1.0f), (float)getElapsedSeconds(start_time_point) * glm::radians(90.0f), glm::vec3(0, 0, 1));
             ubo.view = glm::lookAt(glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
             ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
             ubo.proj[1][1] *= -1;
-            void* data = uniformBuffer.chonklet.mapMemory(ctx, 0);
+            VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(dsa->singleDescriptorSets[0].instances[0]))->uniformBuffer;
+            void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
             memcpy(data, &ubo, sizeof(UniformBufferObject));
-            uniformBuffer.chonklet.unmapMemory(ctx);
+            uniformBuffer->chonklet.unmapMemory(ctx);
 
-            VkSubmitInfo submitInfo {};
+            VkSubmitInfo submitInfo{};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT };
+            VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
             submitInfo.waitSemaphoreCount = 1;
             submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
             submitInfo.pWaitDstStageMask = waitStages;
@@ -170,7 +190,7 @@ int main(int argc, char** argv) {
             if (vkQueueSubmit(ctx->vk_queues.graphics, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to submit command buffer");
             }
-            VkPresentInfoKHR presentInfo {};
+            VkPresentInfoKHR presentInfo{};
             presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             presentInfo.waitSemaphoreCount = 1;
             presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
@@ -182,7 +202,9 @@ int main(int argc, char** argv) {
             VkResult result = vkQueuePresentKHR(ctx->vk_queues.present, &presentInfo);
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
                 ctx->swapChain.rebuildSwapChain();
+                continue;
             } else if (result != VK_SUCCESS) {
+                printf("%d\n", (int)result);
                 throw std::runtime_error("Failed to present swap chain image.");
             }
             if (frame_count % 1000 == 0) {
@@ -194,15 +216,19 @@ int main(int argc, char** argv) {
         }
         vkDeviceWaitIdle(ctx->device);
     }
-    uniformBuffer.destroy(ctx);
+    dsa1->destroy(ctx);
+    delete dsa1;
     dsa->destroy(ctx);
     delete dsa;
     vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(ctx->device, inFlightFence, nullptr);
     devData.destroy(ctx);
+    devData1.destroy(ctx);
     renderState->destroy(ctx);
     delete renderState;
+    node1->destroy(ctx);
+    delete node1;
     node->destroy(ctx);
     delete node;
     renderGraph.destroy(ctx);
