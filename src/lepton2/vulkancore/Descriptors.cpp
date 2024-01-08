@@ -217,9 +217,6 @@ void DescriptorSetArray::buildDescriptorSetLayout(VulkanContext* ctx) {
     if (vkCreateDescriptorSetLayout(ctx->device, &layoutCreateInfo, nullptr, &layoutInfo.descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout.");
     }
-
-    this->layoutInfo.bindings.clear();
-    // We don't clear layoutInfo.typeCounts because we need it for pool logic
 }
 
 void DescriptorSetArray::updateAllDescriptorSets(VulkanContext* ctx) {

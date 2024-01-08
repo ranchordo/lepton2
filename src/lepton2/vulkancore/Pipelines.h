@@ -11,7 +11,7 @@ class RenderGraphNode;
 // But I mean we do have these sweet sweet default params
 struct PipelineInfo {
     PipelineInfo(const char* shaderName,
-                 std::vector<VkDescriptorSetLayout> descriptorSetLayouts,
+                 DescriptorSetArray* dsaLayout,
                  VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
                  VkBool32 useStencilTesting = VK_FALSE,
                  VkStencilOpState stencilState = {},
@@ -19,13 +19,15 @@ struct PipelineInfo {
                  VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                  VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT);
     const char* shaderName;
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    DescriptorSetArray* dsaLayout;
+    std::vector<VkDescriptorSetLayoutBinding> bindingsInfo;
     VkSampleCountFlagBits samples;
     VkBool32 useStencilTesting;
     VkStencilOpState stencilState;
     VkPolygonMode polygonMode;
     VkFrontFace frontFace;
     VkCullModeFlags cullMode;
+    bool isCompatible(const PipelineInfo& other);
 };
 
 class GraphicsPipeline : public DeletableVulkanResource {
@@ -33,9 +35,9 @@ class GraphicsPipeline : public DeletableVulkanResource {
     GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex,
                      VkRenderPass renderPass, PipelineInfo cInfo);
     void bind(VkCommandBuffer commandBuffer);
-    VkPipelineLayout getPipelineLayout() { return this->pipelineLayout; }
     VkPipeline getPipeline() { return this->pipeline; }
     void destroy_back(VulkanContext* ctx) override;
+    PipelineInfo creationInfo;
 
    private:
     VkShaderModule buildShaderModule(VulkanContext* ctx,

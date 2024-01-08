@@ -96,7 +96,7 @@ class DescriptorSetArray : public DeletableVulkanResource {
     } layoutInfo;
     DescriptorPool* parent = nullptr;
     void addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num = 1);
-    bool isLayoutCompatible(DescriptorSetArray* other);
+    static bool isLayoutCompatible(std::vector<VkDescriptorSetLayoutBinding> a, std::vector<VkDescriptorSetLayoutBinding> b);
     void buildDescriptorSetLayout(VulkanContext* ctx);
     void updateAllDescriptorSets(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;

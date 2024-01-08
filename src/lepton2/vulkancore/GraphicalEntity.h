@@ -5,6 +5,10 @@
 #include "ObjectData.h"
 
 namespace lepton2::vulkancore {
+class GraphicalConfigurationStore {
+    #error
+};
+
 class GraphicalEntity: public DeletableVulkanResource {
     const char* pipelineIdentifier;
     DescriptorSetArray* dsa;
