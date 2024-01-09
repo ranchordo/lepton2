@@ -220,12 +220,12 @@ VkFence createGenericFence(VulkanContext* ctx, bool signaled) {
     return ret;
 }
 
-std::chrono::steady_clock::time_point startTiming() {
+lepton2_time_point startTiming() {
     return std::chrono::steady_clock::now();
 }
 
-double getElapsedSeconds(std::chrono::steady_clock::time_point time_point) {
-    auto now = startTiming();
+double getElapsedSeconds(lepton2_time_point time_point) {
+    lepton2_time_point now = startTiming();
     std::chrono::duration<double> interval = now - time_point;
     return interval.count();
 }

@@ -18,40 +18,27 @@ PipelineInfo::PipelineInfo(const char* _shaderName,
                            VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
     this->shaderName = _shaderName;
     this->dsaLayout = _dsaLayout;
+    this->samples = _samples;
     this->useStencilTesting = _useStencilTesting;
     this->stencilState = _stencilState;
     this->polygonMode = _polygonMode;
     this->frontFace = _frontFace;
     this->cullMode = _cullMode;
-    this->descriptorSetLayout = _dsaLayoutReference->descriptorSetLayout;
+    if (_dsaLayoutReference != nullptr) {
+        this->descriptorSetLayout = _dsaLayoutReference->descriptorSetLayout;
+    }
 }
 
-bool PipelineInfo::isCompatible(const PipelineInfo& other) {
-    if (!DescriptorSetArray::isLayoutCompatible(dsaLayout.bindings, other.dsaLayout.bindings)) {
-        return false;
-    }
-    if (strcmp(other.shaderName, this->shaderName) != 0) {
-        return false;
-    }
-    if (this->samples != other.samples) {
-        return false;
-    }
-    if (!this->useStencilTesting != !other.useStencilTesting) {
-        return false;
-    }
-    if (this->useStencilTesting) {
-        throw std::runtime_error("Comparison method for stencilopstate not implemented yet.");
-    }
-    if (this->polygonMode != other.polygonMode) {
-        return false;
-    }
-    if (this->frontFace != other.frontFace) {
-        return false;
-    }
-    if (this->cullMode != other.cullMode) {
-        return false;
-    }
-    return true;
+PipelineInfo::PipelineInfo(const PipelineInfo& other) {
+    this->shaderName = other.shaderName;
+    this->dsaLayout = other.dsaLayout;
+    this->samples = other.samples;
+    this->useStencilTesting = other.useStencilTesting;
+    this->stencilState = other.stencilState;
+    this->polygonMode = other.polygonMode;
+    this->frontFace = other.frontFace;
+    this->cullMode = other.cullMode;
+    this->descriptorSetLayout = other.descriptorSetLayout;
 }
 
 VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std::vector<char>& code) {

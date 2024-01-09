@@ -31,7 +31,7 @@ std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions(
     return attributeDescriptions;
 }
 
-void DeviceObjectData::doVertexBuffer(VulkanContext* ctx, std::vector<Vertex> hostVertices) {
+void DeviceObjectData::doVertexBuffer(VulkanContext* ctx, const std::vector<Vertex>& hostVertices) {
     VulkanBuffer stagingBuffer;
     VkDeviceSize bufferSize = sizeof(Vertex) * hostVertices.size();
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -47,7 +47,7 @@ void DeviceObjectData::doVertexBuffer(VulkanContext* ctx, std::vector<Vertex> ho
     stagingBuffer.destroy(ctx);
 }
 
-void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, std::vector<uint32_t> hostIndices) {
+void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, const std::vector<uint32_t>& hostIndices) {
     VulkanBuffer stagingBuffer;
     VkDeviceSize bufferSize = sizeof(uint32_t) * hostIndices.size();
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -63,9 +63,10 @@ void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, std::vector<uint32_t> h
     stagingBuffer.destroy(ctx);
 }
 
-DeviceObjectData::DeviceObjectData(VulkanContext* ctx, HostObjectData hostData) {
+DeviceObjectData::DeviceObjectData(VulkanContext* ctx, const HostObjectData& hostData) {
     this->doVertexBuffer(ctx, hostData.vertices);
     this->doIndexBuffer(ctx, hostData.indices);
+    this->numIndices = hostData.indices.size();
 }
 
 void DeviceObjectData::destroy_back(VulkanContext* ctx) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Framebuffer.h"
+#include "GraphicalEntity.h"
 #include "Pipelines.h"
 #include "SwapChain.h"
 #include "VulkanContext.h"
@@ -36,7 +37,6 @@ class RenderGraphNode : public DeletableVulkanResource {
     std::vector<ColorAttachmentInfo>* getColorAttachments() {
         return &this->colorAttachments;
     }
-    GraphicsPipeline* buildPipeline(RenderState* renderState, PipelineInfo cInfo);
     GraphicalConfigurationStore configurationStore;
 
    private:
@@ -66,10 +66,16 @@ class RenderState : public DeletableVulkanResource {
     VkRenderPass renderPass = VK_NULL_HANDLE;
     std::vector<VkClearValue*> clearValuePtrs;
     std::vector<RenderTargetImageCreationInfo> rticInfos;
-    void bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame);
+    void begin(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame);
+    void renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame);
+    void end(VkCommandBuffer commandBuffer);
     void destroy_back(VulkanContext* ctx) override;
     VkClearValue depthStencilClearValue = {1.0f, 0};
     VulkanContext* ctx = nullptr;
+
+   private:
+    std::vector<RenderGraphNode*> nodes;
+    friend class RenderGraph;
 };
 
 class RenderGraph : public DeletableVulkanResource {

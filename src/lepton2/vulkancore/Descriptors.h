@@ -20,7 +20,7 @@ struct DescriptorWriteInfoContainer {
 };
 
 namespace descriptortypes {
-
+// FIXME: Need a way to link multiple descriptor buffers ACROSS ARRAYS together (say, for lighting)
 class DescriptorType : public DeletableVulkanResource {
    public:
     virtual VkDescriptorType getDescriptorType() = 0;
@@ -96,6 +96,7 @@ struct DescriptorSetLayoutInfo {
 class DescriptorSetArray : public DeletableVulkanResource {
    public:
     DescriptorSetArray(DescriptorSetLayoutInfo layoutInfo);
+    DescriptorSetArray(DescriptorSetArray* layoutReference);
     DescriptorSetLayoutInfo layoutInfo;
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     DescriptorPool* parent = nullptr;
@@ -104,6 +105,9 @@ class DescriptorSetArray : public DeletableVulkanResource {
     void updateAllDescriptorSets(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;
     std::vector<SingleDescriptorSet> singleDescriptorSets;
+
+   private:
+    bool externalLayout = false;
 };
 
 class DescriptorPoolManager : public DeletableVulkanResource {

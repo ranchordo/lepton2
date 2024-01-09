@@ -1,3 +1,4 @@
+#include "lepton2/vulkancore/GraphicalEntity.h"
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
@@ -14,17 +15,18 @@ using namespace lepton2::vulkancore;
 VulkanContext* ctx;
 
 std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, +0.1f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, +0.1f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, -0.1f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, -0.1f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-    
-    {{-0.5f, -0.5f, -0.1f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, -0.1f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, +0.1f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, +0.1f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}}};
+    {{-0.5f, -0.5f, +0.2f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, +0.2f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, +0.2f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, +0.2f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
-std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1, 7, 4, 5, 6, 7, 5};
+std::vector<Vertex> morevertices = {
+    {{-0.5f, -0.5f, -0.2f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, -0.2f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, -0.2f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, -0.2f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+
+std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
 
 std::vector<Vertex> vertices1 = {
     {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
@@ -34,7 +36,6 @@ std::vector<Vertex> vertices1 = {
 
 std::vector<uint32_t> indices1 = {1, 0, 3, 1, 3, 2};
 
-HostObjectData hostData = {vertices, indices};
 HostObjectData hostData1 = {vertices1, indices1};
 
 VkCommandBuffer commandBuffer;
@@ -79,45 +80,77 @@ int main(int argc, char** argv) {
     RenderGraph renderGraph(ctx);
     RenderGraphNode* node = renderGraph.getTerminatingNode();
 
-    RenderGraphNode* node1 = renderGraph.buildNewNode();
-    RenderTargetImageCreationInfo rticInfo{};
-    rticInfo.use_swapchain = false;
-    rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
-    rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-    rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    node1->addColorAttachment(rticInfo, true);
-    node->connectFromNode(node1, 0, 0);
+    // RenderGraphNode* node1 = renderGraph.buildNewNode();
+    // RenderTargetImageCreationInfo rticInfo{};
+    // rticInfo.use_swapchain = false;
+    // rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
+    // rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    // rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    // rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    // rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    // rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    // node1->addColorAttachment(rticInfo, true);
+    // node->connectFromNode(node1, 0, 0);
 
     RenderState* renderState = renderGraph.buildRenderState();
     ctx->swapChain.buildSwapChain(renderState);
 
-    DescriptorSetArray* dsa = new DescriptorSetArray();
-    DescriptorInfo dsab0{};
-    dsab0.bufferSize = sizeof(UniformBufferObject);
-    dsab0.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    dsa->addNewBinding(dsab0, VK_SHADER_STAGE_VERTEX_BIT, 1);
-    dsa->buildDescriptorSetLayout(ctx);
-    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
+    class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
+       public:
+        void _create(VulkanContext* ctx, const HostObjectData& hostData, float rotationSpeed) {
+            this->objectData = new DeviceObjectData(ctx, hostData);
+            this->rotationSpeed = rotationSpeed;
+        }
+        PipelineInfo getPipelineRequirements() override {
+            DescriptorInfo descInfo;
+            descInfo.bufferSize = sizeof(UniformBufferObject);
+            descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            DescriptorSetLayoutInfo dsli;
+            dsli.addNewBinding(descInfo, VK_SHADER_STAGE_VERTEX_BIT, 1);
+            PipelineInfo req("shader", dsli, nullptr, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+            return req;
+        }
+        void postInit(RenderGraphNode* node, RenderState* renderState) override {
+            this->start_time_point = startTiming();
+        }
+        void preRender(RenderState* renderState, uint32_t descriptorIndex) override {
+            UniformBufferObject ubo{};
+            float elapsedSeconds = (float)getElapsedSeconds(start_time_point);
+            ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
+            ubo.model = glm::rotate(ubo.model, elapsedSeconds * this->rotationSpeed, glm::vec3(0, 0, 1));
+            ubo.view = glm::lookAt(glm::vec3(1, 1, 0.5), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
+            ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
+            ubo.proj[1][1] *= -1;
+            VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(dsa->singleDescriptorSets[descriptorIndex].instances[0]))->uniformBuffer;
+            void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
+            memcpy(data, &ubo, sizeof(UniformBufferObject));
+            uniformBuffer->chonklet.unmapMemory(ctx);
+        }
+        void destroy_back(VulkanContext* ctx) override {
+            this->objectData->destroy(ctx);
+            delete this->objectData;
+            this->destroyEntityResources(ctx);
+        }
 
-    DescriptorSetArray* dsa1 = new DescriptorSetArray();
-    DescriptorInfo dsa1b0{};
-    dsa1b0.colorAttachmentInfo = &node1->getColorAttachments()->at(0);
-    dsa1b0.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-    dsa1->addNewBinding(dsa1b0, VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-    dsa1->buildDescriptorSetLayout(ctx);
-    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa1, ctx->swapChain.swapChainImages.size());
+       private:
+        lepton2_time_point start_time_point;
+        float rotationSpeed;
+    } rectangleEntity;
 
-    PipelineInfo pipelineInfo("shader", dsa, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
-    node1->addPipeline(renderState, "shader", pipelineInfo);
+    rectangleEntity._create(ctx, { vertices, indices }, glm::radians(90.0f));
+    rectangleEntity.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
 
-    PipelineInfo pipelineInfo1("prshader", dsa1, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
-    node->addPipeline(renderState, "prshader", pipelineInfo1);
+    decltype(rectangleEntity) rectangleEntity1;
+    rectangleEntity1._create(ctx, { morevertices, indices }, glm::radians(-90.0f));
+    rectangleEntity1.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
 
-    DeviceObjectData devData(ctx, hostData);
-    DeviceObjectData devData1(ctx, hostData1);
+    // DescriptorSetArray* dsa = new DescriptorSetArray();
+    // DescriptorInfo dsab0{};
+    // dsab0.bufferSize = sizeof(UniformBufferObject);
+    // dsab0.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // dsa->addNewBinding(dsab0, VK_SHADER_STAGE_VERTEX_BIT, 1);
+    // dsa->buildDescriptorSetLayout(ctx);
+    // ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
 
     VkSemaphore imageAvailableSemaphore = createGenericSemaphore(ctx);
     VkSemaphore renderFinishedSemaphore = createGenericSemaphore(ctx);
@@ -153,34 +186,27 @@ int main(int argc, char** argv) {
 
             ctx->swapChain.updateViewportScissor(commandBuffer);
 
-            renderState->bind(commandBuffer, swapChainFrame);
-            node1->getPipeline("shader")->bind(commandBuffer);
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node1->getPipeline("shader")->getPipelineLayout(), 0, 1, &dsa->singleDescriptorSets[0].descriptorSet, 0, nullptr);
+            renderState->begin(commandBuffer, swapChainFrame);
+            renderState->renderAll(commandBuffer, swapChainFrame);
+            renderState->end(commandBuffer);
+            // renderState->bind(commandBuffer, swapChainFrame);
+            // node1->getPipeline("shader")->bind(commandBuffer);
+            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node1->getPipeline("shader")->getPipelineLayout(), 0, 1, &dsa->singleDescriptorSets[0].descriptorSet, 0, nullptr);
 
-            devData.bind(commandBuffer, 0);
+            // devData.bind(commandBuffer, 0);
 
-            vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
+            // vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
 
-            vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-            node->getPipeline("prshader")->bind(commandBuffer);
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node->getPipeline("prshader")->getPipelineLayout(), 0, 1, &dsa1->singleDescriptorSets[swapChainFrame.index].descriptorSet, 0, nullptr);
-            devData1.bind(commandBuffer, 0);
-            vkCmdDrawIndexed(commandBuffer, (uint32_t)indices1.size(), 1, 0, 0, 0);
-            vkCmdEndRenderPass(commandBuffer);
+            // vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+            // node->getPipeline("prshader")->bind(commandBuffer);
+            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node->getPipeline("prshader")->getPipelineLayout(), 0, 1, &dsa1->singleDescriptorSets[swapChainFrame.index].descriptorSet, 0, nullptr);
+            // devData1.bind(commandBuffer, 0);
+            // vkCmdDrawIndexed(commandBuffer, (uint32_t)indices1.size(), 1, 0, 0, 0);
+            // vkCmdEndRenderPass(commandBuffer);
 
             if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to record command buffer.");
             }
-
-            UniformBufferObject ubo{};
-            ubo.model = glm::rotate(glm::mat4(1.0f), (float)getElapsedSeconds(start_time_point) * glm::radians(90.0f), glm::vec3(0, 0, 1));
-            ubo.view = glm::lookAt(glm::vec3(1, 1, 1), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
-            ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
-            ubo.proj[1][1] *= -1;
-            VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(dsa->singleDescriptorSets[0].instances[0]))->uniformBuffer;
-            void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
-            memcpy(data, &ubo, sizeof(UniformBufferObject));
-            uniformBuffer->chonklet.unmapMemory(ctx);
 
             VkSubmitInfo submitInfo{};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -221,19 +247,15 @@ int main(int argc, char** argv) {
         }
         vkDeviceWaitIdle(ctx->device);
     }
-    dsa1->destroy(ctx);
-    delete dsa1;
-    dsa->destroy(ctx);
-    delete dsa;
+    rectangleEntity.destroy(ctx);
+    rectangleEntity1.destroy(ctx);
     vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(ctx->device, inFlightFence, nullptr);
-    devData.destroy(ctx);
-    devData1.destroy(ctx);
     renderState->destroy(ctx);
     delete renderState;
-    node1->destroy(ctx);
-    delete node1;
+    // node1->destroy(ctx);
+    // delete node1;
     node->destroy(ctx);
     delete node;
     renderGraph.destroy(ctx);

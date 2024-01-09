@@ -19,16 +19,16 @@ struct PipelineInfo {
                  VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
                  VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                  VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT);
+    PipelineInfo(const PipelineInfo& other);
     const char* shaderName;
     DescriptorSetLayoutInfo dsaLayout;
-    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     VkSampleCountFlagBits samples;
     VkBool32 useStencilTesting;
     VkStencilOpState stencilState;
     VkPolygonMode polygonMode;
     VkFrontFace frontFace;
     VkCullModeFlags cullMode;
-    bool isCompatible(const PipelineInfo& other);
 };
 
 class GraphicsPipeline : public DeletableVulkanResource {

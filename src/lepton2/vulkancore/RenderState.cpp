@@ -79,12 +79,7 @@ RenderGraphNode* RenderGraph::buildNewNode() {
     return node;
 }
 
-GraphicsPipeline* RenderGraphNode::buildPipeline(RenderState* renderState, PipelineInfo cInfo) {
-    GraphicsPipeline* pipeline = new GraphicsPipeline(renderState->ctx, this->nodeIndex, renderState->renderPass, cInfo);
-    return pipeline;
-}
-
-void RenderState::bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
+void RenderState::begin(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = renderPass;
@@ -102,6 +97,20 @@ void RenderState::bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFr
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void RenderState::renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        RenderGraphNode* node = this->nodes[i];
+        if (i != 0) {
+            vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+        }
+        node->configurationStore.renderAllConfigurations(this, commandBuffer, swapChainFrame.index);
+    }
+}
+
+void RenderState::end(VkCommandBuffer buffer) {
+    vkCmdEndRenderPass(buffer);
 }
 
 void RenderState::destroy_back(VulkanContext* ctx) {
@@ -255,6 +264,7 @@ RenderState* RenderGraph::buildRenderState() {
         throw std::runtime_error("Failed to create render pass.");
     }
     finalState->ctx = this->ctx;
+    finalState->nodes = this->nodes;
     return finalState;
 }
 

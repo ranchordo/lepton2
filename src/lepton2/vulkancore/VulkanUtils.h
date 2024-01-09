@@ -63,6 +63,8 @@
 #define SEPPUKU() \
     { *(int*)0 = 0; }
 
+typedef std::chrono::steady_clock::time_point lepton2_time_point;
+
 namespace lepton2::vulkancore {
 
 class VulkanContext;
@@ -125,7 +127,7 @@ extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst,
 extern std::vector<char> readFile(const std::string& filename);
 extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
 extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
-extern std::chrono::steady_clock::time_point startTiming();
-extern double getElapsedSeconds(std::chrono::steady_clock::time_point time_point);
+extern lepton2_time_point startTiming();
+extern double getElapsedSeconds(lepton2_time_point time_point);
 extern std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute);
 }  // namespace lepton2::vulkancore

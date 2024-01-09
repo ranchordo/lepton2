@@ -190,6 +190,13 @@ void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, VkSha
 
 DescriptorSetArray::DescriptorSetArray(DescriptorSetLayoutInfo _layoutInfo) {
     this->layoutInfo = _layoutInfo;
+    this->externalLayout = false;
+}
+
+DescriptorSetArray::DescriptorSetArray(DescriptorSetArray* layoutReference) {
+    this->layoutInfo = layoutReference->layoutInfo;
+    this->descriptorSetLayout = layoutReference->descriptorSetLayout;
+    this->externalLayout = true;
 }
 
 bool DescriptorSetArray::isLayoutCompatible(std::vector<VkDescriptorSetLayoutBinding> a, std::vector<VkDescriptorSetLayoutBinding> b) {
@@ -243,7 +250,7 @@ void DescriptorSetArray::updateAllDescriptorSets(VulkanContext* ctx) {
 }
 
 void DescriptorSetArray::destroy_back(VulkanContext* ctx) {
-    if (this->descriptorSetLayout != VK_NULL_HANDLE) {
+    if (!this->externalLayout && this->descriptorSetLayout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(ctx->device, this->descriptorSetLayout, nullptr);
     }
     if (this->singleDescriptorSets.size() > 0) {
