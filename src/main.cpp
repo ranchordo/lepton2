@@ -1,4 +1,5 @@
 #include "lepton2/vulkancore/GraphicalEntity.h"
+#include "lepton2/vulkancore/GraphicalPresets.h"
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
@@ -80,17 +81,17 @@ int main(int argc, char** argv) {
     RenderGraph renderGraph(ctx);
     RenderGraphNode* node = renderGraph.getTerminatingNode();
 
-    // RenderGraphNode* node1 = renderGraph.buildNewNode();
-    // RenderTargetImageCreationInfo rticInfo{};
-    // rticInfo.use_swapchain = false;
-    // rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
-    // rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    // rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    // rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    // rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-    // rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    // node1->addColorAttachment(rticInfo, true);
-    // node->connectFromNode(node1, 0, 0);
+    RenderGraphNode* node1 = renderGraph.buildNewNode();
+    RenderTargetImageCreationInfo rticInfo{};
+    rticInfo.use_swapchain = false;
+    rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
+    rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    node1->addColorAttachment(rticInfo, true);
+    node->connectFromNode(node1, 0, 0);
 
     RenderState* renderState = renderGraph.buildRenderState();
     ctx->swapChain.buildSwapChain(renderState);
@@ -138,19 +139,14 @@ int main(int argc, char** argv) {
     } rectangleEntity;
 
     rectangleEntity._create(ctx, { vertices, indices }, glm::radians(90.0f));
-    rectangleEntity.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
+    rectangleEntity.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
 
     decltype(rectangleEntity) rectangleEntity1;
     rectangleEntity1._create(ctx, { morevertices, indices }, glm::radians(-90.0f));
-    rectangleEntity1.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
+    rectangleEntity1.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
 
-    // DescriptorSetArray* dsa = new DescriptorSetArray();
-    // DescriptorInfo dsab0{};
-    // dsab0.bufferSize = sizeof(UniformBufferObject);
-    // dsab0.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    // dsa->addNewBinding(dsab0, VK_SHADER_STAGE_VERTEX_BIT, 1);
-    // dsa->buildDescriptorSetLayout(ctx);
-    // ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
+    StaticScreenEntity screenEntity(ctx, "prshader", &node1->getColorAttachments()->at(0));
+    screenEntity.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
 
     VkSemaphore imageAvailableSemaphore = createGenericSemaphore(ctx);
     VkSemaphore renderFinishedSemaphore = createGenericSemaphore(ctx);
@@ -189,20 +185,6 @@ int main(int argc, char** argv) {
             renderState->begin(commandBuffer, swapChainFrame);
             renderState->renderAll(commandBuffer, swapChainFrame);
             renderState->end(commandBuffer);
-            // renderState->bind(commandBuffer, swapChainFrame);
-            // node1->getPipeline("shader")->bind(commandBuffer);
-            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node1->getPipeline("shader")->getPipelineLayout(), 0, 1, &dsa->singleDescriptorSets[0].descriptorSet, 0, nullptr);
-
-            // devData.bind(commandBuffer, 0);
-
-            // vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
-
-            // vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-            // node->getPipeline("prshader")->bind(commandBuffer);
-            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node->getPipeline("prshader")->getPipelineLayout(), 0, 1, &dsa1->singleDescriptorSets[swapChainFrame.index].descriptorSet, 0, nullptr);
-            // devData1.bind(commandBuffer, 0);
-            // vkCmdDrawIndexed(commandBuffer, (uint32_t)indices1.size(), 1, 0, 0, 0);
-            // vkCmdEndRenderPass(commandBuffer);
 
             if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to record command buffer.");
