@@ -8,12 +8,12 @@ using namespace lepton2::vulkancore::descriptortypes;
 
 DescriptorType* DescriptorType::constructDescriptorInstance(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
     switch (info.descriptorType) {
-        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-            return new UniformBufferDescriptor(ctx, info, index);
-        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-            return new InputAttachmentDescriptor(ctx, info, index);
-        default:
-            throw std::runtime_error("Unsupported descriptor type.");
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        return new UniformBufferDescriptor(ctx, info, index);
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+        return new InputAttachmentDescriptor(ctx, info, index);
+    default:
+        throw std::runtime_error("Unsupported descriptor type.");
     }
     return nullptr;
 }
@@ -84,7 +84,7 @@ void InputAttachmentDescriptor::destroy_back(VulkanContext* ctx) {
 const std::vector<DescriptorPoolSizeTracker> defaultSizes = {
     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256, 0},
     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256, 0},
-    {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 256, 0}};
+    {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 256, 0} };
 
 const uint32_t defaultTotalSets = 256;
 
@@ -132,7 +132,7 @@ bool DescriptorPool::allocateDescriptorSets(VulkanContext* ctx, DescriptorSetArr
     if (!canFit(dsa, quantity)) {
         return false;
     }
-    std::vector<VkDescriptorSetLayout> layouts(quantity, dsa->layoutInfo.descriptorSetLayout);
+    std::vector<VkDescriptorSetLayout> layouts(quantity, dsa->descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = descriptorPool;
@@ -170,38 +170,42 @@ void DescriptorPool::destroy_back(VulkanContext* ctx) {
     }
 }
 
-void DescriptorSetArray::addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num) {
+void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num) {
     uint32_t uint_type = (uint32_t)descriptorInfo.descriptorType;
-    if (this->layoutInfo.typeCounts.count(uint_type) == 0) {
-        this->layoutInfo.typeCounts[uint_type] = 0;
+    if (this->typeCounts.count(uint_type) == 0) {
+        this->typeCounts[uint_type] = 0;
     }
-    this->layoutInfo.typeCounts[uint_type] += num;
+    this->typeCounts[uint_type] += num;
     for (uint32_t i = 0; i < num; i++) {
         VkDescriptorSetLayoutBinding binding{};
-        binding.binding = this->layoutInfo.bindings.size();
+        binding.binding = this->bindings.size();
         binding.descriptorType = descriptorInfo.descriptorType;
         binding.descriptorCount = 1;
         binding.stageFlags = stageFlags;
         binding.pImmutableSamplers = nullptr;
-        this->layoutInfo.bindings.push_back(binding);
-        this->layoutInfo.descInfo.push_back(descriptorInfo);
+        this->bindings.push_back(binding);
+        this->descInfo.push_back(descriptorInfo);
     }
 }
 
-bool DescriptorSetArray::isLayoutCompatible(DescriptorSetArray* other) {
-    if (this->layoutInfo.bindings.size() != other->layoutInfo.bindings.size()) {
+DescriptorSetArray::DescriptorSetArray(DescriptorSetLayoutInfo _layoutInfo) {
+    this->layoutInfo = _layoutInfo;
+}
+
+bool DescriptorSetArray::isLayoutCompatible(std::vector<VkDescriptorSetLayoutBinding> a, std::vector<VkDescriptorSetLayoutBinding> b) {
+    if (a.size() != b.size()) {
         return false;
     }
-    for (uint32_t i = 0; i < this->layoutInfo.bindings.size(); i++) {
-        VkDescriptorSetLayoutBinding a = this->layoutInfo.bindings[i];
-        VkDescriptorSetLayoutBinding b = other->layoutInfo.bindings[i];
-        if (a.binding != b.binding) {
+    for (uint32_t i = 0; i < a.size(); i++) {
+        VkDescriptorSetLayoutBinding ba = a[i];
+        VkDescriptorSetLayoutBinding bb = b[i];
+        if (ba.binding != bb.binding) {
             return false;
         }
-        if (a.descriptorType != b.descriptorType) {
+        if (ba.descriptorType != bb.descriptorType) {
             return false;
         }
-        if (a.stageFlags != b.stageFlags) {
+        if (ba.stageFlags != bb.stageFlags) {
             return false;
         }
     }
@@ -214,7 +218,7 @@ void DescriptorSetArray::buildDescriptorSetLayout(VulkanContext* ctx) {
     layoutCreateInfo.bindingCount = this->layoutInfo.bindings.size();
     layoutCreateInfo.pBindings = this->layoutInfo.bindings.data();
 
-    if (vkCreateDescriptorSetLayout(ctx->device, &layoutCreateInfo, nullptr, &layoutInfo.descriptorSetLayout) != VK_SUCCESS) {
+    if (vkCreateDescriptorSetLayout(ctx->device, &layoutCreateInfo, nullptr, &this->descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout.");
     }
 }
@@ -239,8 +243,8 @@ void DescriptorSetArray::updateAllDescriptorSets(VulkanContext* ctx) {
 }
 
 void DescriptorSetArray::destroy_back(VulkanContext* ctx) {
-    if (this->layoutInfo.descriptorSetLayout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(ctx->device, this->layoutInfo.descriptorSetLayout, nullptr);
+    if (this->descriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(ctx->device, this->descriptorSetLayout, nullptr);
     }
     if (this->singleDescriptorSets.size() > 0) {
         std::vector<VkDescriptorSet> descriptorSets;

@@ -4,6 +4,10 @@
 // without whose work this library would not be remotely similar.
 // Their c++ work, from which vulkancore is based, is licensed as CC0 v1.0.
 
+#ifdef __INTELLISENSE__
+#define DEBUG_ENV
+#endif
+
 #if defined(__APPLE__)
 #include <MoltenVK/mvk_vulkan.h>
 #endif

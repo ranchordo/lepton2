@@ -11,23 +11,23 @@ const char* shaders_spirv_load_dir = "shaders";
 }
 
 PipelineInfo::PipelineInfo(const char* _shaderName,
-                           DescriptorSetArray* _dsaLayout,
+                           DescriptorSetLayoutInfo _dsaLayout,
+                           DescriptorSetArray* _dsaLayoutReference,
                            VkSampleCountFlagBits _samples, VkBool32 _useStencilTesting,
                            VkStencilOpState _stencilState, VkPolygonMode _polygonMode,
                            VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
     this->shaderName = _shaderName;
     this->dsaLayout = _dsaLayout;
-    this->samples = _samples;
     this->useStencilTesting = _useStencilTesting;
     this->stencilState = _stencilState;
     this->polygonMode = _polygonMode;
     this->frontFace = _frontFace;
     this->cullMode = _cullMode;
-    this->bindingsInfo = _dsaLayout->layoutInfo.bindings;
+    this->descriptorSetLayout = _dsaLayoutReference->descriptorSetLayout;
 }
 
 bool PipelineInfo::isCompatible(const PipelineInfo& other) {
-    if (!DescriptorSetArray::isLayoutCompatible(this->bindingsInfo, other.bindingsInfo)) {
+    if (!DescriptorSetArray::isLayoutCompatible(dsaLayout.bindings, other.dsaLayout.bindings)) {
         return false;
     }
     if (strcmp(other.shaderName, this->shaderName) != 0) {
@@ -51,9 +51,6 @@ bool PipelineInfo::isCompatible(const PipelineInfo& other) {
     if (this->cullMode != other.cullMode) {
         return false;
     }
-    if (this->bindingsInfo != other.bindingsInfo) {
-        return false;
-    }
     return true;
 }
 
@@ -70,7 +67,7 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
 }
 
 GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass, PipelineInfo cInfo) : creationInfo(cInfo) {
-    this->creationInfo.dsaLayout = nullptr;
+    this->creationInfo.descriptorSetLayout = VK_NULL_HANDLE;  // Don't keep old pointers
     size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
     char filename_buffer[combined_length + 1];
     snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
@@ -166,7 +163,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &cInfo.dsaLayout->layoutInfo.descriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &cInfo.descriptorSetLayout;
 
     if (vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout.");
@@ -209,6 +206,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
 
 void GraphicsPipeline::bind(VkCommandBuffer commandBuffer) {
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
+}
+
+void GraphicsPipeline::bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index) {
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &dsa->singleDescriptorSets[index].descriptorSet, 0, nullptr);
 }
 
 void GraphicsPipeline::destroy_back(VulkanContext* ctx) {

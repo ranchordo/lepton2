@@ -86,23 +86,23 @@ struct SingleDescriptorSet {
     std::vector<descriptortypes::DescriptorType*> instances;
 };
 
+struct DescriptorSetLayoutInfo {
+    std::unordered_map<uint32_t, uint32_t> typeCounts;
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    std::vector<DescriptorInfo> descInfo;
+    void addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num = 1);
+};
+
 class DescriptorSetArray : public DeletableVulkanResource {
    public:
-    struct {
-        std::unordered_map<uint32_t, uint32_t> typeCounts;
-        std::vector<VkDescriptorSetLayoutBinding> bindings;
-        std::vector<DescriptorInfo> descInfo;
-        VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    } layoutInfo;
+    DescriptorSetArray(DescriptorSetLayoutInfo layoutInfo);
+    DescriptorSetLayoutInfo layoutInfo;
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     DescriptorPool* parent = nullptr;
-    void addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num = 1);
     static bool isLayoutCompatible(std::vector<VkDescriptorSetLayoutBinding> a, std::vector<VkDescriptorSetLayoutBinding> b);
     void buildDescriptorSetLayout(VulkanContext* ctx);
     void updateAllDescriptorSets(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;
-    std::vector<VkDescriptorSetLayout> getSingularLayout() {
-        return {this->layoutInfo.descriptorSetLayout};
-    }
     std::vector<SingleDescriptorSet> singleDescriptorSets;
 };
 

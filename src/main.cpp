@@ -14,12 +14,17 @@ using namespace lepton2::vulkancore;
 VulkanContext* ctx;
 
 std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+    {{-0.5f, -0.5f, +0.1f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, +0.1f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, -0.1f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, -0.1f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+    
+    {{-0.5f, -0.5f, -0.1f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, -0.1f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, +0.1f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, +0.1f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}}};
 
-std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
+std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1, 7, 4, 5, 6, 7, 5};
 
 std::vector<Vertex> vertices1 = {
     {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
@@ -105,10 +110,10 @@ int main(int argc, char** argv) {
     dsa1->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa1, ctx->swapChain.swapChainImages.size());
 
-    PipelineInfo pipelineInfo("shader", dsa->getSingularLayout(), VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+    PipelineInfo pipelineInfo("shader", dsa, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
     node1->addPipeline(renderState, "shader", pipelineInfo);
 
-    PipelineInfo pipelineInfo1("prshader", dsa1->getSingularLayout(), VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+    PipelineInfo pipelineInfo1("prshader", dsa1, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
     node->addPipeline(renderState, "prshader", pipelineInfo1);
 
     DeviceObjectData devData(ctx, hostData);
@@ -160,7 +165,7 @@ int main(int argc, char** argv) {
             node->getPipeline("prshader")->bind(commandBuffer);
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, node->getPipeline("prshader")->getPipelineLayout(), 0, 1, &dsa1->singleDescriptorSets[swapChainFrame.index].descriptorSet, 0, nullptr);
             devData1.bind(commandBuffer, 0);
-            vkCmdDrawIndexed(commandBuffer, (uint32_t)indices.size(), 1, 0, 0, 0);
+            vkCmdDrawIndexed(commandBuffer, (uint32_t)indices1.size(), 1, 0, 0, 0);
             vkCmdEndRenderPass(commandBuffer);
 
             if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

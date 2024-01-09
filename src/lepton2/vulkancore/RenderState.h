@@ -25,6 +25,7 @@ struct ColorAttachmentInfo {
     std::vector<VulkanImage*> swapChainCreations;
 };
 
+class RenderState;
 class RenderGraphNode : public DeletableVulkanResource {
    public:
     void addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
@@ -35,8 +36,8 @@ class RenderGraphNode : public DeletableVulkanResource {
     std::vector<ColorAttachmentInfo>* getColorAttachments() {
         return &this->colorAttachments;
     }
-    void addPipeline(RenderState* renderState, std::string key, PipelineInfo cInfo);
-    GraphicsPipeline* getPipeline(std::string key);
+    GraphicsPipeline* buildPipeline(RenderState* renderState, PipelineInfo cInfo);
+    GraphicalConfigurationStore configurationStore;
 
    private:
     RenderGraphNode();
@@ -55,7 +56,6 @@ class RenderGraphNode : public DeletableVulkanResource {
     // std::vector<std::pair<uint32_t, RenderGraphNode*>> outputs;
     std::unordered_map<uint32_t, std::pair<uint32_t, RenderGraphNode*>> inputs;
 
-    std::unordered_map<std::string, GraphicsPipeline*> pipelines;
     friend class RenderGraph;
 };
 
@@ -69,11 +69,7 @@ class RenderState : public DeletableVulkanResource {
     void bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame);
     void destroy_back(VulkanContext* ctx) override;
     VkClearValue depthStencilClearValue = {1.0f, 0};
-
-   private:
     VulkanContext* ctx = nullptr;
-    friend class RenderGraph;
-    friend class RenderGraphNode;
 };
 
 class RenderGraph : public DeletableVulkanResource {

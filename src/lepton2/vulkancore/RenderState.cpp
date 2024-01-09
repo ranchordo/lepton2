@@ -2,11 +2,11 @@
 
 using namespace lepton2::vulkancore;
 
-RenderGraphNode::RenderGraphNode() {
+RenderGraphNode::RenderGraphNode() : configurationStore(this) {
     this->isTerminatingNode = false;
 }
 
-RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) {
+RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) : configurationStore(this) {
     if (!isTerminatingNode) {
         throw std::runtime_error("Need to construct a RenderGraphNode with isTerminatingNode==1 for this constructor.");
     }
@@ -70,11 +70,7 @@ void RenderGraphNode::requestDepthAsInput(uint32_t index) {
 }
 
 void RenderGraphNode::destroy_back(VulkanContext* ctx) {
-    for (auto const& p : this->pipelines) {
-        p.second->destroy(ctx);
-        delete p.second;
-    }
-    this->pipelines.clear();
+    // Nothing get
 }
 
 RenderGraphNode* RenderGraph::buildNewNode() {
@@ -83,13 +79,9 @@ RenderGraphNode* RenderGraph::buildNewNode() {
     return node;
 }
 
-void RenderGraphNode::addPipeline(RenderState* renderState, std::string key, PipelineInfo cInfo) {
+GraphicsPipeline* RenderGraphNode::buildPipeline(RenderState* renderState, PipelineInfo cInfo) {
     GraphicsPipeline* pipeline = new GraphicsPipeline(renderState->ctx, this->nodeIndex, renderState->renderPass, cInfo);
-    this->pipelines[key] = pipeline;
-}
-
-GraphicsPipeline* RenderGraphNode::getPipeline(std::string key) {
-    return this->pipelines[key];
+    return pipeline;
 }
 
 void RenderState::bind(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {

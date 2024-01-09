@@ -11,7 +11,8 @@ class RenderGraphNode;
 // But I mean we do have these sweet sweet default params
 struct PipelineInfo {
     PipelineInfo(const char* shaderName,
-                 DescriptorSetArray* dsaLayout,
+                 DescriptorSetLayoutInfo dsaLayout,
+                 DescriptorSetArray* dsaLayoutReference,
                  VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
                  VkBool32 useStencilTesting = VK_FALSE,
                  VkStencilOpState stencilState = {},
@@ -19,8 +20,8 @@ struct PipelineInfo {
                  VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                  VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT);
     const char* shaderName;
-    DescriptorSetArray* dsaLayout;
-    std::vector<VkDescriptorSetLayoutBinding> bindingsInfo;
+    DescriptorSetLayoutInfo dsaLayout;
+    VkDescriptorSetLayout descriptorSetLayout;
     VkSampleCountFlagBits samples;
     VkBool32 useStencilTesting;
     VkStencilOpState stencilState;
@@ -36,8 +37,12 @@ class GraphicsPipeline : public DeletableVulkanResource {
                      VkRenderPass renderPass, PipelineInfo cInfo);
     void bind(VkCommandBuffer commandBuffer);
     VkPipeline getPipeline() { return this->pipeline; }
+    void bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index);
     void destroy_back(VulkanContext* ctx) override;
     PipelineInfo creationInfo;
+    VkPipelineLayout getPipelineLayout() {
+        return this->pipelineLayout;
+    }
 
    private:
     VkShaderModule buildShaderModule(VulkanContext* ctx,
