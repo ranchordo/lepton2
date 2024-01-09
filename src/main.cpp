@@ -231,13 +231,14 @@ int main(int argc, char** argv) {
     }
     rectangleEntity.destroy(ctx);
     rectangleEntity1.destroy(ctx);
+    screenEntity.destroy(ctx);
     vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(ctx->device, inFlightFence, nullptr);
     renderState->destroy(ctx);
     delete renderState;
-    // node1->destroy(ctx);
-    // delete node1;
+    node1->destroy(ctx);
+    delete node1;
     node->destroy(ctx);
     delete node;
     renderGraph.destroy(ctx);
