@@ -87,7 +87,7 @@ class DeletableVulkanResource {
         }
         this->destroyed = true;
     }
-    void addLinked(DeletableVulkanResource* linked, bool deleteptr) {
+    void addLinkedResource(DeletableVulkanResource* linked, bool deleteptr) {
         std::pair<bool, DeletableVulkanResource*> pair(deleteptr, linked);
         this->linked.push_back(pair);
     }
@@ -98,7 +98,7 @@ class DeletableVulkanResource {
     std::vector<std::pair<bool, DeletableVulkanResource*>> linked;
 };
 
-class DeletablVulkanResourceTracker : public DeletableVulkanResource {
+class DeletableVulkanResourceTracker : public DeletableVulkanResource {
    public:
     void destroy_back(VulkanContext* ctx) override {}
 };

@@ -4,6 +4,7 @@
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
 #include "lepton2/vulkancore/VulkanContext.h"
+#include "lepton2/vulkancore/VulkanLoop.h"
 #include "lepton2/vulkancore/VulkanMemory.h"
 #include "lepton2/vulkancore/VulkanUtils.h"
 
@@ -94,7 +95,14 @@ int main(int argc, char** argv) {
     node->connectFromNode(node1, 0, 0);
 
     RenderState* renderState = renderGraph.buildRenderState();
+    renderState->addLinkedResource(node, true);
+    renderState->addLinkedResource(node1, true);
+    renderState->addLinkedResource(&renderGraph, false);
     ctx->swapChain.buildSwapChain(renderState);
+
+    VulkanLoop mainLoop(renderState, 2);
+
+    DeletableVulkanResourceTracker sceneContainer;
 
     class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
        public:
@@ -108,7 +116,7 @@ int main(int argc, char** argv) {
             descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             DescriptorSetLayoutInfo dsli;
             dsli.addNewBinding(descInfo, VK_SHADER_STAGE_VERTEX_BIT, 1);
-            PipelineInfo req("shader", dsli, nullptr, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+            PipelineInfo req("shader", dsli, nullptr);
             return req;
         }
         void postInit(RenderGraphNode* node, RenderState* renderState) override {
@@ -138,110 +146,38 @@ int main(int argc, char** argv) {
         float rotationSpeed;
     } rectangleEntity;
 
-    rectangleEntity._create(ctx, { vertices, indices }, glm::radians(90.0f));
+    rectangleEntity._create(ctx, {vertices, indices}, glm::radians(90.0f));
     rectangleEntity.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
+    sceneContainer.addLinkedResource(&rectangleEntity, false);
 
     decltype(rectangleEntity) rectangleEntity1;
-    rectangleEntity1._create(ctx, { morevertices, indices }, glm::radians(-90.0f));
+    rectangleEntity1._create(ctx, {morevertices, indices}, glm::radians(-90.0f));
     rectangleEntity1.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
+    sceneContainer.addLinkedResource(&rectangleEntity1, false);
 
     StaticScreenEntity screenEntity(ctx, "prshader", &node1->getColorAttachments()->at(0));
     screenEntity.initialize(node, renderState, ctx->swapChain.swapChainImages.size());
+    sceneContainer.addLinkedResource(&screenEntity, false);
 
-    VkSemaphore imageAvailableSemaphore = createGenericSemaphore(ctx);
-    VkSemaphore renderFinishedSemaphore = createGenericSemaphore(ctx);
-    VkFence inFlightFence = createGenericFence(ctx, true);
+    mainLoop.addLinkedResource(&sceneContainer, false);
 
-    {
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
-
-        if (vkAllocateCommandBuffers(ctx->device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate command buffers.");
+    mainLoop.initialize();
+    uint32_t frame_count = 0;
+    while (!mainLoop.shouldLoopTerminate()) {
+        auto time_point = startTiming();
+        mainLoop.process();
+        if (frame_count % 1000 == 0) {
+            double fp = getElapsedSeconds(time_point);
+            printf("Interval (μs): %lf\n", fp * 1000000);
+            printf("Framerate (fps): %lf\n", 1 / fp);
         }
-        uint32_t frame_count = 0;
-        auto start_time_point = startTiming();
-        while (!glfwWindowShouldClose(ctx->window)) {
-            auto time_point = startTiming();
-            glfwPollEvents();
-            vkWaitForFences(ctx->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-            vkResetFences(ctx->device, 1, &inFlightFence);
-            SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(imageAvailableSemaphore);
-            vkResetCommandBuffer(commandBuffer, 0);
-            VkCommandBufferBeginInfo beginInfo{};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = 0;
-            beginInfo.pInheritanceInfo = nullptr;
-
-            if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to begin recording command buffer.");
-            }
-
-            ctx->swapChain.updateViewportScissor(commandBuffer);
-
-            renderState->begin(commandBuffer, swapChainFrame);
-            renderState->renderAll(commandBuffer, swapChainFrame);
-            renderState->end(commandBuffer);
-
-            if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to record command buffer.");
-            }
-
-            VkSubmitInfo submitInfo{};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
-            submitInfo.pWaitDstStageMask = waitStages;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &commandBuffer;
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
-            if (vkQueueSubmit(ctx->vk_queues.graphics, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to submit command buffer");
-            }
-            VkPresentInfoKHR presentInfo{};
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
-
-            presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains = &ctx->swapChain.swapChain;
-            presentInfo.pImageIndices = &swapChainFrame.index;
-            presentInfo.pResults = nullptr;
-            VkResult result = vkQueuePresentKHR(ctx->vk_queues.present, &presentInfo);
-            if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-                ctx->swapChain.rebuildSwapChain();
-                continue;
-            } else if (result != VK_SUCCESS) {
-                printf("%d\n", (int)result);
-                throw std::runtime_error("Failed to present swap chain image.");
-            }
-            if (frame_count % 1000 == 0) {
-                double fp = getElapsedSeconds(time_point);
-                printf("Interval (μs): %lf\n", fp * 1000000);
-                printf("Framerate (fps): %lf\n", 1 / fp);
-            }
-            frame_count++;
-        }
-        vkDeviceWaitIdle(ctx->device);
+        frame_count++;
     }
-    rectangleEntity.destroy(ctx);
-    rectangleEntity1.destroy(ctx);
-    screenEntity.destroy(ctx);
-    vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
-    vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
-    vkDestroyFence(ctx->device, inFlightFence, nullptr);
+    mainLoop.terminateLoop();
+
+    mainLoop.destroy(ctx);
     renderState->destroy(ctx);
     delete renderState;
-    node1->destroy(ctx);
-    delete node1;
-    node->destroy(ctx);
-    delete node;
-    renderGraph.destroy(ctx);
     ctx->destroy(ctx);
     delete ctx;
     return 0;

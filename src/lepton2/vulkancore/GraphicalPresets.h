@@ -14,7 +14,7 @@ class StaticScreenEntity : public GraphicalEntity {
         descInfo.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
         DescriptorSetLayoutInfo dsli;
         dsli.addNewBinding(descInfo, VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-        PipelineInfo req(this->shaderName, dsli, nullptr, VK_SAMPLE_COUNT_1_BIT, VK_FALSE, {}, VK_POLYGON_MODE_FILL, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_CULL_MODE_NONE);
+        PipelineInfo req(this->shaderName, dsli, nullptr);
         return req;
     }
 
