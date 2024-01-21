@@ -29,7 +29,7 @@ struct ColorAttachmentInfo {
 class RenderState;
 class RenderGraphNode : public DeletableVulkanResource {
    public:
-    void addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
+    ColorAttachmentInfo* addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
     void connectFromNode(RenderGraphNode* src, uint32_t color_output, uint32_t inputAttachmentIndex);
     void destroy_back(VulkanContext* ctx) override;
     uint32_t getSubpassIndex() { return this->nodeIndex; }
@@ -81,9 +81,7 @@ class RenderState : public DeletableVulkanResource {
 class RenderGraph : public DeletableVulkanResource {
    public:
     RenderGraph(VulkanContext* ctx);
-    RenderGraphNode* getTerminatingNode() {
-        return this->terminator;
-    }
+    RenderGraphNode* getTerminatingNode();
     RenderGraphNode* buildNewNode();
     RenderState* buildRenderState();
     void destroy_back(VulkanContext* ctx) override;
@@ -91,7 +89,7 @@ class RenderGraph : public DeletableVulkanResource {
    private:
     std::vector<RenderGraphNode*> nodes;
     VulkanContext* ctx;
-    RenderGraphNode* terminator;
+    RenderGraphNode* terminator = NULL;
     friend class RenderState;
 };
 }  // namespace lepton2::vulkancore

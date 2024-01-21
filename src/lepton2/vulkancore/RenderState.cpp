@@ -31,9 +31,9 @@ RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) : c
     this->colorAttachments.push_back(info);
 }
 
-void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear) {
+ColorAttachmentInfo* RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear) {
     if (this->isTerminatingNode) {
-        throw std::runtime_error("Color attachments of presenting/terminating nodes in the RenderGraph are predefined.");
+        throw std::runtime_error("Color attachments of terminating nodes in the RenderGraph are predefined.");
     }
     rticInfo.use_swapchain = false;
     VkAttachmentDescription desc{};
@@ -50,6 +50,7 @@ void RenderGraphNode::addColorAttachment(RenderTargetImageCreationInfo rticInfo,
     info.rticInfo = rticInfo;
 
     this->colorAttachments.push_back(info);
+    return &this->colorAttachments.at(this->colorAttachments.size() - 1);
 }
 
 void RenderGraphNode::connectFromNode(RenderGraphNode* src, uint32_t color_output, uint32_t inputAttachmentIndex) {
@@ -121,8 +122,12 @@ void RenderState::destroy_back(VulkanContext* ctx) {
 
 RenderGraph::RenderGraph(VulkanContext* ctx) {
     this->ctx = ctx;
+}
+
+RenderGraphNode* RenderGraph::getTerminatingNode() {
     this->terminator = new RenderGraphNode(ctx, true);
     this->nodes.push_back(this->terminator);
+    return this->terminator;
 }
 
 #define NODE_MARK_TEMPORARY 1

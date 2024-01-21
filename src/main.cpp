@@ -30,23 +30,11 @@ std::vector<Vertex> morevertices = {
 
 std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
 
-std::vector<Vertex> vertices1 = {
-    {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+1.0f, +1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-1.0f, +1.0f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-std::vector<uint32_t> indices1 = {1, 0, 3, 1, 3, 2};
-
-HostObjectData hostData1 = {vertices1, indices1};
-
-VkCommandBuffer commandBuffer;
-
 struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
-} ubo;
+};
 
 int main(int argc, char** argv) {
 #ifdef DEBUG_ENV
@@ -89,7 +77,7 @@ int main(int argc, char** argv) {
     rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    rticInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    rticInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
     node1->addColorAttachment(rticInfo, true);
     node->connectFromNode(node1, 0, 0);

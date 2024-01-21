@@ -31,7 +31,10 @@ std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions(
     return attributeDescriptions;
 }
 
-void DeviceObjectData::doVertexBuffer(VulkanContext* ctx, const std::vector<Vertex>& hostVertices) {
+void DeviceObjectData::copyVertexBuffer(VulkanContext* ctx, const std::vector<Vertex>& hostVertices) {
+    if (hostVertices.size() != this->numVertices) {
+        throw std::runtime_error("Must keep consistent vertex size when updating device data.");
+    }
     VulkanBuffer stagingBuffer;
     VkDeviceSize bufferSize = sizeof(Vertex) * hostVertices.size();
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -41,13 +44,14 @@ void DeviceObjectData::doVertexBuffer(VulkanContext* ctx, const std::vector<Vert
         memcpy(data, hostVertices.data(), (size_t)bufferSize);
     }
     stagingBuffer.chonklet.unmapMemory(ctx);
-    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    createBuffer(ctx, bufferSize, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->vertexBuffer);
     copyBuffer(ctx, &stagingBuffer, &vertexBuffer, bufferSize);
     stagingBuffer.destroy(ctx);
 }
 
-void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, const std::vector<uint32_t>& hostIndices) {
+void DeviceObjectData::copyIndexBuffer(VulkanContext* ctx, const std::vector<uint32_t>& hostIndices) {
+    if (hostIndices.size() != this->numIndices) {
+        throw std::runtime_error("Must keep consistent index size when updating device data");
+    }
     VulkanBuffer stagingBuffer;
     VkDeviceSize bufferSize = sizeof(uint32_t) * hostIndices.size();
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -57,16 +61,33 @@ void DeviceObjectData::doIndexBuffer(VulkanContext* ctx, const std::vector<uint3
         memcpy(data, hostIndices.data(), (size_t)bufferSize);
     }
     stagingBuffer.chonklet.unmapMemory(ctx);
-    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    createBuffer(ctx, bufferSize, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->indexBuffer);
     copyBuffer(ctx, &stagingBuffer, &indexBuffer, bufferSize);
     stagingBuffer.destroy(ctx);
 }
 
+void DeviceObjectData::createBuffers(VulkanContext* ctx, uint32_t numVertices, uint32_t numIndices) {
+    VkDeviceSize vertexBufferSize = sizeof(Vertex) * numVertices;
+    VkDeviceSize indexBufferSize = sizeof(uint32_t) * numIndices;
+    VkBufferUsageFlags vertexBufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    createBuffer(ctx, vertexBufferSize, vertexBufferUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->vertexBuffer);
+    VkBufferUsageFlags indexBufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    createBuffer(ctx, indexBufferSize, indexBufferUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->indexBuffer);
+    this->numIndices = numIndices;
+    this->numVertices = numVertices;
+}
+
+void DeviceObjectData::updateDeviceData(VulkanContext* ctx, const HostObjectData& hostData) {
+    this->copyVertexBuffer(ctx, hostData.vertices);
+    this->copyIndexBuffer(ctx, hostData.indices);
+}
+
 DeviceObjectData::DeviceObjectData(VulkanContext* ctx, const HostObjectData& hostData) {
-    this->doVertexBuffer(ctx, hostData.vertices);
-    this->doIndexBuffer(ctx, hostData.indices);
-    this->numIndices = hostData.indices.size();
+    this->createBuffers(ctx, hostData.vertices.size(), hostData.indices.size());
+    this->updateDeviceData(ctx, hostData);
+}
+
+DeviceObjectData::DeviceObjectData(VulkanContext* ctx, uint32_t numVertices, uint32_t numIndices) {
+    this->createBuffers(ctx, numVertices, numIndices);
 }
 
 void DeviceObjectData::destroy_back(VulkanContext* ctx) {
