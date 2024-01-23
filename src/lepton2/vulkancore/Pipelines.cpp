@@ -6,10 +6,6 @@
 
 using namespace lepton2::vulkancore;
 
-namespace lepton2::vulkancore {
-const char* shaders_spirv_load_dir = "shaders";
-}
-
 PipelineInfo::PipelineInfo(const char* _shaderName,
                            DescriptorSetLayoutInfo _dsaLayout,
                            DescriptorSetArray* _dsaLayoutReference,
@@ -55,12 +51,12 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
 
 GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass, PipelineInfo cInfo) : creationInfo(cInfo) {
     this->creationInfo.descriptorSetLayout = VK_NULL_HANDLE;  // Don't keep old pointers
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
     char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", shaders_spirv_load_dir, cInfo.shaderName);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
     std::vector<char> vertex_code = readFile(std::string(filename_buffer));
     this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", shaders_spirv_load_dir, cInfo.shaderName);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
     std::vector<char> fragment_code = readFile(std::string(filename_buffer));
     this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
 

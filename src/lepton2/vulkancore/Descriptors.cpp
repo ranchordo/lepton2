@@ -1,6 +1,7 @@
 #include "Descriptors.h"
 
 #include "RenderState.h"
+#include "Textures.h"
 #include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
@@ -8,21 +9,27 @@ using namespace lepton2::vulkancore::descriptortypes;
 
 DescriptorType* DescriptorType::constructDescriptorInstance(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
     switch (info.descriptorType) {
-    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-        return new UniformBufferDescriptor(ctx, info, index);
-    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-        return new InputAttachmentDescriptor(ctx, info, index);
-    default:
-        throw std::runtime_error("Unsupported descriptor type.");
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            return new UniformBufferDescriptor(ctx, info, index);
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+            return new ImageSamplerDescriptor(ctx, info, index);
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            return new InputAttachmentDescriptor(ctx, info, index);
+        default:
+            throw std::runtime_error("Unsupported descriptor type.");
     }
     return nullptr;
 }
 
 UniformBufferDescriptor::UniformBufferDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    this->uniformBuffer = new VulkanBuffer();
-    createBuffer(ctx, info.bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, properties, this->uniformBuffer);
-    this->uniformBufferSize = info.bufferSize;
+    if (info.uniformBufferData.createNewBuffer) {
+        VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        this->uniformBuffer = new VulkanBuffer();
+        createBuffer(ctx, info.uniformBufferData.bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, properties, this->uniformBuffer);
+        this->uniformBufferSize = info.uniformBufferData.bufferSize;
+    } else {
+        this->uniformBuffer = info.uniformBufferData.bufferReference;
+    }
 }
 
 DescriptorWriteInfoContainer UniformBufferDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
@@ -47,8 +54,52 @@ void UniformBufferDescriptor::destroy_back(VulkanContext* ctx) {
     delete this->uniformBuffer;
 }
 
+ImageSamplerDescriptor::ImageSamplerDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
+    this->imageIndex = index;
+    this->componentIndex = info.imageSamplerData.componentIndex;
+    this->container = info.imageSamplerData.container;
+}
+
+DescriptorWriteInfoContainer ImageSamplerDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
+    DescriptorWriteInfoContainer ret;
+    ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VulkanImage* target = nullptr;
+    if (this->container->components[this->componentIndex]->useSwapChainIndexing) {
+        target = this->container->components[this->componentIndex]->swapChainIndexedImages[this->imageIndex];
+        if (this->updateInfo == nullptr) {
+            this->updateInfo = new DescriptorSetUpdateInfo();
+            this->updateInfo->alive = true;
+            this->updateInfo->instance = this;
+            this->updateInfo->dstSet = dstSet;
+            this->updateInfo->dstBinding = dstBinding;
+            ctx->swapChain.descriptorUpdates.insert(this->updateInfo);
+        }
+    } else {
+        target = this->container->components[this->componentIndex]->textureImage;
+    }
+    ret.imageInfo.imageView = target->imageView;
+    ret.imageInfo.sampler = this->container->textureSampler;
+
+    ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    ret.writeInfo.dstSet = dstSet;
+    ret.writeInfo.dstBinding = dstBinding;
+    ret.writeInfo.dstArrayElement = 0;
+    ret.writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    ret.writeInfo.descriptorCount = 1;
+    ret.writeInfo.pNext = nullptr;
+
+    return ret;
+}
+
+void ImageSamplerDescriptor::destroy_back(VulkanContext* ctx) {
+    if (this->updateInfo != nullptr) {
+        this->updateInfo->alive = false;
+    }
+    // UpdateInfo will be cleaned by the swapChain on a recreation or deletion.
+}
+
 InputAttachmentDescriptor::InputAttachmentDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
-    this->colorAttachmentInfo = info.colorAttachmentInfo;
+    this->colorAttachmentInfo = info.inputAttachmentData.colorAttachmentInfo;
     this->arrayIndex = index;
 }
 
@@ -84,7 +135,7 @@ void InputAttachmentDescriptor::destroy_back(VulkanContext* ctx) {
 const std::vector<DescriptorPoolSizeTracker> defaultSizes = {
     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256, 0},
     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256, 0},
-    {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 256, 0} };
+    {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 256, 0}};
 
 const uint32_t defaultTotalSets = 256;
 
@@ -243,8 +294,8 @@ void DescriptorSetArray::updateAllDescriptorSets(VulkanContext* ctx) {
         }
     }
     for (uint32_t i = 0; i < writeInfos.size(); i++) {
-        writeInfos[i].pImageInfo = &imageInfos[i]; // Must keep alive
-        writeInfos[i].pBufferInfo = &bufferInfos[i]; // Must keep alive
+        writeInfos[i].pImageInfo = &imageInfos[i];    // Must keep alive
+        writeInfos[i].pBufferInfo = &bufferInfos[i];  // Must keep alive
     }
     vkUpdateDescriptorSets(ctx->device, writeInfos.size(), writeInfos.data(), 0, nullptr);
 }

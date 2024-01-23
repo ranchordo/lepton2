@@ -30,7 +30,8 @@ void createBuffer(VulkanContext* ctx, VkDeviceSize size, VkBufferUsageFlags usag
     buffer->findMemory(ctx, properties);
 }
 
-void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkSampleCountFlagBits samples, VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image) {
+void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
+                 VkSampleCountFlagBits samples, VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image) {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -52,7 +53,9 @@ void createImage(VulkanContext* ctx, uint32_t width, uint32_t height, VkFormat f
     image->imageFormat = format;
     image->do_not_destroy_image = false;
     image->findMemory(ctx, properties);
-    image->buildImageView(ctx, aspectFlags);
+    if (aspectFlags != 0) {
+        image->buildImageView(ctx, aspectFlags);
+    }
 }
 
 void createRenderTarget(VulkanContext* ctx, VkExtent2D extent, RenderTargetImageCreationInfo* rticInfo, VulkanImage* image) {
@@ -139,7 +142,7 @@ void transitionImageLayout(VulkanContext* ctx, VulkanImage* image, ImageLayoutTr
     endSingleTimeCommands(ctx, commandBuffer);
 }
 
-void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+void copyBufferToImage(VulkanContext* ctx, VulkanBuffer* buffer, VulkanImage* image, uint32_t width, uint32_t height) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands(ctx);
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
@@ -151,7 +154,7 @@ void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint3
     region.imageSubresource.layerCount = 1;
     region.imageOffset = {0, 0, 0};
     region.imageExtent = {width, height, 1};
-    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(commandBuffer, buffer->buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     endSingleTimeCommands(ctx, commandBuffer);
 }
 
@@ -230,7 +233,7 @@ double getElapsedSeconds(lepton2_time_point time_point) {
     return interval.count();
 }
 
-std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute) {
+std::filesystem::path getExecutableLocation(const char* argv0, bool force_absolute) {
     std::filesystem::path relative_path = std::filesystem::path(argv0).parent_path();
     if (!force_absolute) {
         return relative_path;

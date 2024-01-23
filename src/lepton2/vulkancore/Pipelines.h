@@ -4,7 +4,6 @@
 #include "VulkanUtils.h"
 
 namespace lepton2::vulkancore {
-extern const char* shaders_spirv_load_dir;
 class RenderGraphNode;
 
 // You have become the very thing you swore to destroy.

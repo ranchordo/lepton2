@@ -9,7 +9,7 @@
 
 namespace lepton2::vulkancore {
 struct RenderTargetImageCreationInfo {
-    bool use_swapchain = false;
+    bool use_presenter = false;
     VkFormat format;
     VkSampleCountFlagBits samples;
     VkImageTiling imageTiling;

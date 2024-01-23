@@ -10,7 +10,7 @@ class StaticScreenEntity : public GraphicalEntity {
     StaticScreenEntity(VulkanContext* ctx, const char* shaderName, ColorAttachmentInfo* colorAttachmentInfo);
     PipelineInfo getPipelineRequirements() override {
         DescriptorInfo descInfo;
-        descInfo.colorAttachmentInfo = this->colorAttachmentInfo;
+        descInfo.inputAttachmentData.colorAttachmentInfo = this->colorAttachmentInfo;
         descInfo.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
         DescriptorSetLayoutInfo dsli;
         dsli.addNewBinding(descInfo, VK_SHADER_STAGE_FRAGMENT_BIT, 1);

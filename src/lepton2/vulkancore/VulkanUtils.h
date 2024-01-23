@@ -77,7 +77,8 @@ class DeletableVulkanResource {
     virtual void destroy_back(VulkanContext* ctx) = 0;
     void destroy(VulkanContext* ctx) {
         if (!destroyed) {
-            for (std::pair<bool, DeletableVulkanResource*> pair : this->linked) {
+            for (int i = linked.size() - 1; i >= 0; i--) {
+                std::pair<bool, DeletableVulkanResource*> pair = linked[i];
                 pair.second->destroy(ctx);
                 if (pair.first) {
                     delete pair.second;
@@ -120,7 +121,7 @@ extern void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
 extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
 extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
 extern void transitionImageLayout(VulkanContext* ctx, VulkanImage* image, ImageLayoutTransitionMode iltm);
-extern void copyBufferToImage(VulkanContext* ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+extern void copyBufferToImage(VulkanContext* ctx, VulkanBuffer* buffer, VulkanImage* image, uint32_t width, uint32_t height);
 extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
                        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
@@ -129,5 +130,5 @@ extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
 extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
 extern lepton2_time_point startTiming();
 extern double getElapsedSeconds(lepton2_time_point time_point);
-extern std::filesystem::path getExecutableLocation(char* argv0, bool force_absolute);
+extern std::filesystem::path getExecutableLocation(const char* argv0, bool force_absolute);
 }  // namespace lepton2::vulkancore

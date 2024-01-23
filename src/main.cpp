@@ -3,6 +3,7 @@
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
+#include "lepton2/vulkancore/Textures.h"
 #include "lepton2/vulkancore/VulkanContext.h"
 #include "lepton2/vulkancore/VulkanLoop.h"
 #include "lepton2/vulkancore/VulkanMemory.h"
@@ -17,16 +18,10 @@ using namespace lepton2::vulkancore;
 VulkanContext* ctx;
 
 std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, +0.2f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, +0.2f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, +0.2f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, +0.2f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-std::vector<Vertex> morevertices = {
-    {{-0.5f, -0.5f, -0.2f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, -0.2f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, -0.2f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, -0.2f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+    {{+0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+    {{+0.5f, +0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, +0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
 std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
 
@@ -46,33 +41,26 @@ int main(int argc, char** argv) {
     }
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan main", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Lepton2 test", nullptr, nullptr);
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Vulkan test of some sort";
+    appInfo.pApplicationName = "Lepton2 test";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "None yet";
+    appInfo.pEngineName = "lepton2";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
 #ifdef DEBUG_ENV
-    ctx = new VulkanContext(true, true, appInfo, window);
+    ctx = new VulkanContext(argv[0], true, true, appInfo, window);
 #else
-    ctx = new VulkanContext(false, false, appInfo, window);
+    ctx = new VulkanContext(argv[0], false, false, appInfo, window);
 #endif
-
-    // Relative shader loading
-    std::filesystem::path shader_location_path = getExecutableLocation(argv[0], false).append("shaders");
-    const char* shader_location = shader_location_path.c_str();
-    char* new_shader_location = (char*)malloc(strlen(shader_location) + 1);
-    strcpy(new_shader_location, shader_location);
-    shaders_spirv_load_dir = new_shader_location;
 
     RenderGraph renderGraph(ctx);
     RenderGraphNode* node = renderGraph.getTerminatingNode();
 
     RenderGraphNode* node1 = renderGraph.buildNewNode();
     RenderTargetImageCreationInfo rticInfo{};
-    rticInfo.use_swapchain = false;
+    rticInfo.use_presenter = false;
     rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
     rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -92,18 +80,35 @@ int main(int argc, char** argv) {
 
     DeletableVulkanResourceTracker sceneContainer;
 
+    SamplerInfo defaultSamplerInfo = {};
+    Texture* texture = new Texture(ctx, defaultSamplerInfo);
+    texture->addTextureComponent(ctx, "texture.png");
+    sceneContainer.addLinkedResource(texture, true);
+
     class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
        public:
-        void _create(VulkanContext* ctx, const HostObjectData& hostData, float rotationSpeed) {
-            this->objectData = new DeviceObjectData(ctx, hostData);
+        void _create(VulkanContext* ctx, DeviceObjectData* objectData, float rotationSpeed, float zpos, Texture* texture) {
+            this->objectData = objectData;
             this->rotationSpeed = rotationSpeed;
+            this->textureContainer = texture;
+            this->zpos = zpos;
         }
         PipelineInfo getPipelineRequirements() override {
-            DescriptorInfo descInfo;
-            descInfo.bufferSize = sizeof(UniformBufferObject);
-            descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             DescriptorSetLayoutInfo dsli;
-            dsli.addNewBinding(descInfo, VK_SHADER_STAGE_VERTEX_BIT, 1);
+            {
+                DescriptorInfo descInfo;
+                descInfo.uniformBufferData.bufferSize = sizeof(UniformBufferObject);
+                descInfo.uniformBufferData.createNewBuffer = true;
+                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                dsli.addNewBinding(descInfo, VK_SHADER_STAGE_VERTEX_BIT, 1);
+            }
+            {
+                DescriptorInfo descInfo;
+                descInfo.imageSamplerData.container = this->textureContainer;
+                descInfo.imageSamplerData.componentIndex = 0;
+                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                dsli.addNewBinding(descInfo, VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+            }
             PipelineInfo req("shader", dsli, nullptr);
             return req;
         }
@@ -113,7 +118,7 @@ int main(int argc, char** argv) {
         void preRender(RenderState* renderState, uint32_t descriptorIndex) override {
             UniformBufferObject ubo{};
             float elapsedSeconds = (float)getElapsedSeconds(start_time_point);
-            ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
+            ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, zpos + sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
             ubo.model = glm::rotate(ubo.model, elapsedSeconds * this->rotationSpeed, glm::vec3(0, 0, 1));
             ubo.view = glm::lookAt(glm::vec3(1, 1, 0.5), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
             ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
@@ -124,22 +129,24 @@ int main(int argc, char** argv) {
             uniformBuffer->chonklet.unmapMemory(ctx);
         }
         void destroy_back(VulkanContext* ctx) override {
-            this->objectData->destroy(ctx);
-            delete this->objectData;
             this->destroyEntityResources(ctx);
         }
 
        private:
         lepton2_time_point start_time_point;
         float rotationSpeed;
+        float zpos;
+        Texture* textureContainer;
     } rectangleEntity;
 
-    rectangleEntity._create(ctx, {vertices, indices}, glm::radians(90.0f));
+    DeviceObjectData* devData = new DeviceObjectData(ctx, {vertices, indices});
+    sceneContainer.addLinkedResource(devData, true);
+    rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
     rectangleEntity.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
     sceneContainer.addLinkedResource(&rectangleEntity, false);
 
     decltype(rectangleEntity) rectangleEntity1;
-    rectangleEntity1._create(ctx, {morevertices, indices}, glm::radians(-90.0f));
+    rectangleEntity1._create(ctx, devData, glm::radians(-90.0f), -0.2f, texture);
     rectangleEntity1.initialize(node1, renderState, ctx->swapChain.swapChainImages.size());
     sceneContainer.addLinkedResource(&rectangleEntity1, false);
 

@@ -32,7 +32,8 @@ struct SwapChainSupportDetails {
 
 class VulkanContext : public DeletableVulkanResource {
    public:
-    VulkanContext(bool _enable_validation_layers, bool _print_debug_info, VkApplicationInfo appInfo, GLFWwindow* _window) : allocManager(this), swapChain(this) {
+    VulkanContext(const char* argv0, bool _enable_validation_layers, bool _print_debug_info, VkApplicationInfo appInfo, GLFWwindow* _window)
+        : allocManager(this), swapChain(this) {
         this->window = _window;
         this->enable_validation_layers = _enable_validation_layers;
         this->print_debug_info = _print_debug_info;
@@ -42,6 +43,7 @@ class VulkanContext : public DeletableVulkanResource {
         this->createLogicalDevice();
         this->swapChain.querySwapChain();
         this->buildAllCommandPools();
+        this->setRelativePaths(argv0);
     }
     GLFWwindow* window;
     VkInstance instance;
@@ -61,6 +63,8 @@ class VulkanContext : public DeletableVulkanResource {
     DescriptorPoolManager descriptorPoolManager;
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+    char* shaders_spirv_load_path;
+    char* assets_load_path;
     void destroy_back(VulkanContext* ctx) override;
 
    private:
@@ -75,5 +79,6 @@ class VulkanContext : public DeletableVulkanResource {
     void createLogicalDevice();
     void buildCommandPool(VkCommandPoolCreateFlags flags, uint32_t queueFamilyIndex, VkCommandPool* commandPool);
     void buildAllCommandPools();
+    void setRelativePaths(const char* argv0);
 };
 }  // namespace lepton2::vulkancore

@@ -7,10 +7,22 @@ namespace lepton2::vulkancore {
 class VulkanContext;
 class ColorAttachmentInfo;
 struct DescriptorSetUpdateInfo;
+class Texture;
+class TextureComponent;
 struct DescriptorInfo {
     VkDescriptorType descriptorType;
-    VkDeviceSize bufferSize;
-    ColorAttachmentInfo* colorAttachmentInfo;
+    struct {
+        VkDeviceSize bufferSize = 0;
+        bool createNewBuffer = true;
+        VulkanBuffer* bufferReference = nullptr;
+    } uniformBufferData;
+    struct {
+        ColorAttachmentInfo* colorAttachmentInfo;
+    } inputAttachmentData;
+    struct {
+        Texture* container;
+        uint32_t componentIndex;
+    } imageSamplerData;
 };
 
 struct DescriptorWriteInfoContainer {
@@ -20,7 +32,6 @@ struct DescriptorWriteInfoContainer {
 };
 
 namespace descriptortypes {
-// FIXME: Need a way to link multiple descriptor buffers ACROSS ARRAYS together (say, for lighting)
 class DescriptorType : public DeletableVulkanResource {
    public:
     virtual VkDescriptorType getDescriptorType() = 0;
@@ -38,6 +49,20 @@ class UniformBufferDescriptor : public DescriptorType {
 
     VulkanBuffer* uniformBuffer;
     VkDeviceSize uniformBufferSize;
+};
+
+class ImageSamplerDescriptor : public DescriptorType {
+   public:
+    ImageSamplerDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index);
+    VkDescriptorType getDescriptorType() override { return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; }
+    DescriptorWriteInfoContainer getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) override;
+    void destroy_back(VulkanContext* ctx) override;
+
+   private:
+    Texture* container;
+    uint32_t componentIndex;
+    uint32_t imageIndex;
+    DescriptorSetUpdateInfo* updateInfo = nullptr;
 };
 
 class InputAttachmentDescriptor : public DescriptorType {

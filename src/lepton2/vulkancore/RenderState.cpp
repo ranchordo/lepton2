@@ -23,7 +23,7 @@ RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) : c
     desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     RenderTargetImageCreationInfo rticInfo;
-    rticInfo.use_swapchain = true;
+    rticInfo.use_presenter = true;
     ColorAttachmentInfo info;
     info.desc = desc;
     info.rticInfo = rticInfo;
@@ -35,7 +35,7 @@ ColorAttachmentInfo* RenderGraphNode::addColorAttachment(RenderTargetImageCreati
     if (this->isTerminatingNode) {
         throw std::runtime_error("Color attachments of terminating nodes in the RenderGraph are predefined.");
     }
-    rticInfo.use_swapchain = false;
+    rticInfo.use_presenter = false;
     VkAttachmentDescription desc{};
     desc.format = rticInfo.format;
     desc.samples = rticInfo.samples;
@@ -178,7 +178,7 @@ RenderState* RenderGraph::buildRenderState() {
     depthStencilCreationInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     depthStencilCreationInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     depthStencilCreationInfo.aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthStencilCreationInfo.use_swapchain = false;
+    depthStencilCreationInfo.use_presenter = false;
     depthStencilCreationInfo.creationTracker = nullptr;
     VkAttachmentDescription depthStencilAttachment{};
     depthStencilAttachment.format = depthStencilCreationInfo.format;
@@ -200,7 +200,7 @@ RenderState* RenderGraph::buildRenderState() {
         for (uint32_t i = 0; i < node->colorAttachments.size(); i++) {
             node->subpassInfo.colorAttachmentReferences[i].attachment = attachments.size();
             node->subpassInfo.colorAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            if (!node->colorAttachments[i].rticInfo.use_swapchain) {
+            if (!node->colorAttachments[i].rticInfo.use_presenter) {
                 node->colorAttachments[i].rticInfo.creationTracker = &node->colorAttachments[i].swapChainCreations;
             }
             finalState->rticInfos.push_back(node->colorAttachments[i].rticInfo);

@@ -109,7 +109,7 @@ void SwapChain::buildSwapChain(RenderState* renderState) {
     for (uint32_t i = 0; i < this->swapChainImages.size(); i++) {
         Framebuffer* nfb = new Framebuffer();
         for (RenderTargetImageCreationInfo rticInfo : renderState->rticInfos) {
-            if (rticInfo.use_swapchain) {
+            if (rticInfo.use_presenter) {
                 nfb->addImage(swapChainImages[i]);
             } else {
                 VulkanImage* rtImage = new VulkanImage();
