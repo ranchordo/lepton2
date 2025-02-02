@@ -1,6 +1,7 @@
 #include "GraphicalPresets.h"
 
-using namespace lepton2::vulkancore::graphicalpresets;
+using namespace lepton2::graphics::graphicalpresets;
+using namespace lepton2::graphics;
 using namespace lepton2::vulkancore;
 
 VertexStructDescriptor simplePresetVsd = {{{offsetof(SimplePresetVertex, pos), VK_FORMAT_R32G32B32_SFLOAT},

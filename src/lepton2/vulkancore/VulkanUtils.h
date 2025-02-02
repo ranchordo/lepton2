@@ -20,11 +20,8 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
@@ -42,31 +39,16 @@
 #include "../../external/stb_image.h"
 #include "../../external/tiny_obj_loader.h"
 
-#define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
-#define EXTDoProxy(name, ...) ((EXTBuildProxyFuncptr(name) == nullptr) ? (VK_ERROR_EXTENSION_NOT_PRESENT) : (EXTBuildProxyFuncptr(name)(__VA_ARGS__)))
-#define EXTDoVoidProxy(name, ...)                \
-    if (EXTBuildProxyFuncptr(name) != nullptr) { \
-        EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
-    }
-
 #define CHECK_DESTRUCTION(status) \
     {                             \
         if (this->destroyed) {    \
             return status;        \
         }                         \
     }
-#define CHECK_DESTRUCTION_VOID() \
-    {                            \
-        if (this->destroyed) {   \
-            return;              \
-        }                        \
-    }
 
 // Don't ask.
 #define SEPPUKU() \
     { *(int*)0 = 0; }
-
-typedef std::chrono::steady_clock::time_point lepton2_time_point;
 
 namespace lepton2::vulkancore {
 
@@ -137,10 +119,6 @@ extern void copyBufferToImage(VulkanContext* ctx, VulkanBuffer* buffer, VulkanIm
 extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst, VkDeviceSize size,
                        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
-extern std::vector<char> readFile(const std::string& filename);
 extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
 extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
-extern lepton2_time_point startTiming();
-extern double getElapsedSeconds(lepton2_time_point time_point);
-extern std::filesystem::path getExecutableLocation(const char* argv0, bool force_absolute);
 }  // namespace lepton2::vulkancore

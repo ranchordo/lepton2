@@ -1,8 +1,19 @@
 #include "VulkanContext.h"
 
+#include <filesystem>
+
+#include "../utils/LeptonUtils.h"
+
 using namespace lepton2::vulkancore;
 
 #define VALIDATION_MESSAGE_TYPE_MASK (~VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+
+#define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
+#define EXTDoProxy(name, ...) ((EXTBuildProxyFuncptr(name) == nullptr) ? (VK_ERROR_EXTENSION_NOT_PRESENT) : (EXTBuildProxyFuncptr(name)(__VA_ARGS__)))
+#define EXTDoVoidProxy(name, ...)                \
+    if (EXTBuildProxyFuncptr(name) != nullptr) { \
+        EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
+    }
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -286,12 +297,12 @@ void VulkanContext::buildAllCommandPools() {
 }
 
 void VulkanContext::setRelativePaths(const char* argv0) {
-    std::filesystem::path shader_location_path = getExecutableLocation(argv0, false).append("shaders");
+    std::filesystem::path shader_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("shaders");
     const char* shader_location = shader_location_path.c_str();
     this->shaders_spirv_load_path = (char*)malloc(strlen(shader_location) + 1);
     strcpy(this->shaders_spirv_load_path, shader_location);
 
-    std::filesystem::path asset_location_path = getExecutableLocation(argv0, false).append("assets");
+    std::filesystem::path asset_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("assets");
     const char* asset_location = asset_location_path.c_str();
     this->assets_load_path = (char*)malloc(strlen(asset_location) + 1);
     strcpy(this->assets_load_path, asset_location);

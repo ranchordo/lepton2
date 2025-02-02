@@ -2,11 +2,11 @@
 
 using namespace lepton2::vulkancore;
 
-RenderGraphNode::RenderGraphNode() : configurationStore(this) {
+RenderGraphNode::RenderGraphNode() {
     this->isTerminatingNode = false;
 }
 
-RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) : configurationStore(this) {
+RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) {
     if (!isTerminatingNode) {
         throw std::runtime_error("Need to construct a RenderGraphNode with isTerminatingNode==1 for this constructor.");
     }
@@ -60,9 +60,7 @@ void RenderGraphNode::connectFromNode(RenderGraphNode* src, uint32_t color_outpu
     if (color_output >= src->colorAttachments.size()) {
         throw std::runtime_error("Color output index doesn't exist for this node.");
     }
-    // std::pair<uint32_t, RenderGraphNode*> opair(color_output, this);
     std::pair<uint32_t, RenderGraphNode*> ipair(color_output, src);
-    // src->outputs.push_back(opair);
     this->inputs[inputAttachmentIndex] = ipair;
 }
 
@@ -129,7 +127,10 @@ void RenderState::renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapCh
         if (node->getSubpassDsa() != nullptr) {
             this->dsaQueue.push_back({1, node->getSubpassDsa()});
         }
-        node->configurationStore.renderAllConfigurations(this, commandBuffer, swapChainFrame.index);
+        if (node->getRenderCallback() != nullptr) {
+            node->getRenderCallback()->renderSubpassCmd(commandBuffer, this, swapChainFrame.index);
+        }
+        // node->configurationStore.renderAllConfigurations(this, commandBuffer, swapChainFrame.index);
     }
 }
 

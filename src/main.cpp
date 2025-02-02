@@ -1,5 +1,5 @@
-#include "lepton2/vulkancore/GraphicalEntity.h"
-#include "lepton2/vulkancore/GraphicalPresets.h"
+#include "lepton2/graphics/GraphicalEntity.h"
+#include "lepton2/graphics/GraphicalPresets.h"
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
@@ -8,8 +8,11 @@
 #include "lepton2/vulkancore/VulkanLoop.h"
 #include "lepton2/vulkancore/VulkanMemory.h"
 #include "lepton2/vulkancore/VulkanUtils.h"
+#include "lepton2/utils/LeptonUtils.h"
 
 using namespace lepton2::vulkancore;
+using namespace lepton2::utils;
+using namespace lepton2::graphics;
 
 // TODO: Investigate push_back and see if we can switch to static sizing in some places (namely RenderState et al.)
 // TODO: Investigate persistent mapping
@@ -91,6 +94,10 @@ int main(int argc, char** argv) {
     // ctx->swapChain.swapChainQueryResults.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     ctx->swapChain.buildSwapChain(renderState);
 
+    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
+    renderState->addLinkedResource(store, true);
+    store->addPass(renderState);
+
     VulkanLoop mainLoop(renderState, 2);
 
     DeletableVulkanResourceTracker sceneContainer;
@@ -169,12 +176,12 @@ int main(int argc, char** argv) {
     DeviceObjectData* devData = new DeviceObjectData(ctx, hostData);
     sceneContainer.addLinkedResource(devData, true);
     rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
-    rectangleEntity.initialize(node, renderState);
+    rectangleEntity.initialize(store, node, renderState);
     sceneContainer.addLinkedResource(&rectangleEntity, false);
 
     decltype(rectangleEntity) rectangleEntity1;
     rectangleEntity1._create(ctx, devData, glm::radians(-90.0f), -0.2f, texture);
-    rectangleEntity1.initialize(node, renderState);
+    rectangleEntity1.initialize(store, node, renderState);
     sceneContainer.addLinkedResource(&rectangleEntity1, false);
 
     // graphicalpresets::StaticScreenEntity screenEntity(ctx, "prshader", &node1->getColorAttachments()->at(0));

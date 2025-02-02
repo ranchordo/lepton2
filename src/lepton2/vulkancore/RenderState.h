@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Framebuffer.h"
-#include "GraphicalEntity.h"
 #include "Pipelines.h"
 #include "SwapChain.h"
 #include "VulkanContext.h"
@@ -26,6 +25,11 @@ struct ColorAttachmentInfo {
     std::vector<VulkanImage*> swapChainCreations;
 };
 
+class SubpassRenderCallback {
+   public:
+    virtual void renderSubpassCmd(VkCommandBuffer commandBuffer, RenderState* pass, uint32_t swapChainFrameIndex) = 0;
+};
+
 class RenderState;
 class RenderGraphNode : public DeletableVulkanResource {
    public:
@@ -37,10 +41,11 @@ class RenderGraphNode : public DeletableVulkanResource {
     std::vector<ColorAttachmentInfo>* getColorAttachments() {
         return &this->colorAttachments;
     }
-    GraphicalConfigurationStore configurationStore;
     void setupSubpassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
     void removeSubpassDescriptorSet(VulkanContext* ctx);
     DescriptorSetArray* getSubpassDsa() { return this->subpassDsa; }
+    void setRenderCallback(SubpassRenderCallback* callback) { this->renderCallback = callback; }
+    SubpassRenderCallback* getRenderCallback() { return this->renderCallback; }
 
    private:
     RenderGraphNode();
@@ -56,9 +61,9 @@ class RenderGraphNode : public DeletableVulkanResource {
     uint32_t nodeIndex = 0;
     uint8_t markings = 0;
     uint32_t depthInputRequest = UINT32_MAX;
-    // std::vector<std::pair<uint32_t, RenderGraphNode*>> outputs;
     std::unordered_map<uint32_t, std::pair<uint32_t, RenderGraphNode*>> inputs;
     DescriptorSetArray* subpassDsa = nullptr;
+    SubpassRenderCallback* renderCallback = nullptr;
 
     friend class RenderGraph;
 };
@@ -77,6 +82,9 @@ class RenderState : public DeletableVulkanResource {
     void destroy_back(VulkanContext* ctx) override;
     VkClearValue depthStencilClearValue = {1.0f, 0};
     VulkanContext* ctx = nullptr;
+
+    uint32_t numSubpasses() { return this->nodes.size(); }
+    RenderGraphNode* getNode(uint32_t idx) { return this->nodes[idx]; }
 
     void setupPassDescriptorSet(DescriptorSetLayoutInfo dsli);
     void removePassDescriptorSet();

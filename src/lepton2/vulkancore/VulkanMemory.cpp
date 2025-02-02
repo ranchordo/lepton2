@@ -206,7 +206,7 @@ MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* 
 }
 
 void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
-    CHECK_DESTRUCTION_VOID();
+    CHECK_DESTRUCTION();
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Trying to free offs:%d, size:%d, ck:%p\n", (int)chonklet.offset, (int)chonklet.size, chonklet.chonkus);
     printf("Initial state: ");

@@ -1,7 +1,9 @@
+#include "GraphicalConfigurations.h"
+
+#include "../vulkancore/RenderState.h"
 #include "GraphicalEntity.h"
 
-#include "RenderState.h"
-
+using namespace lepton2::graphics;
 using namespace lepton2::vulkancore;
 
 void GraphicalConfiguration::renderAllUsers(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex) {
@@ -24,7 +26,7 @@ void GraphicalConfiguration::destroy_back(VulkanContext* ctx) {
     delete this->layoutReference;
 }
 
-GraphicalConfiguration* GraphicalConfigurationStore::createNewConfiguration(RenderState* renderState, PipelineConstraints constraints) {
+GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfiguration(RenderState* renderState, PipelineConstraints constraints) {
     GraphicalConfiguration* newConfiguration = new GraphicalConfiguration();
     newConfiguration->layoutReference = new DescriptorSetArray(constraints.layoutInfo);
     newConfiguration->layoutReference->buildDescriptorSetLayout(renderState->ctx);
@@ -44,7 +46,7 @@ GraphicalConfiguration* GraphicalConfigurationStore::createNewConfiguration(Rend
     return newConfiguration;
 }
 
-GraphicalConfigurationHandle GraphicalConfigurationStore::getConfiguration(RenderState* renderState, PipelineConstraints constraints, GraphicalEntity* user) {
+GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguration(RenderState* renderState, PipelineConstraints constraints, GraphicalEntity* user) {
     std::unordered_set<GraphicalConfiguration*>* selectedVector = nullptr;
     if (this->cache.count(constraints.shaderName) == 0) {
         std::unordered_set<GraphicalConfiguration*> newTempVector;
@@ -73,8 +75,12 @@ GraphicalConfigurationHandle GraphicalConfigurationStore::getConfiguration(Rende
     return ret;
 }
 
-void GraphicalConfigurationStore::freeConfiguration(VulkanContext* ctx, GraphicalConfigurationHandle configuration) {
-    CHECK_DESTRUCTION_VOID();
+void SubpassGCSRenderCallback::renderSubpassCmd(VkCommandBuffer commandBuffer, vkc::RenderState* pass, uint32_t swapChainFrameIndex) {
+    this->store->renderAllConfigurations(pass, commandBuffer, swapChainFrameIndex);
+}
+
+void SubpassGraphicalConfigurationStore::freeConfiguration(VulkanContext* ctx, GraphicalConfigurationHandle configuration) {
+    CHECK_DESTRUCTION();
     if (this->cache.count(configuration.config->pipeline->creationConstraints.shaderName) == 0) {
         return;
     }
@@ -87,7 +93,7 @@ void GraphicalConfigurationStore::freeConfiguration(VulkanContext* ctx, Graphica
     }
 }
 
-void GraphicalConfigurationStore::renderAllConfigurations(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex) {
+void SubpassGraphicalConfigurationStore::renderAllConfigurations(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex) {
     for (std::pair<std::string, std::unordered_set<GraphicalConfiguration*>> const& pair : this->cache) {
         for (GraphicalConfiguration* config : pair.second) {
             config->renderAllUsers(renderState, commandBuffer, frameIndex);
@@ -95,7 +101,7 @@ void GraphicalConfigurationStore::renderAllConfigurations(RenderState* renderSta
     }
 }
 
-void GraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
+void SubpassGraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
     for (std::pair<std::string, std::unordered_set<GraphicalConfiguration*>> const& pair : this->cache) {
         for (GraphicalConfiguration* config : pair.second) {
             config->destroy(ctx);
@@ -105,27 +111,14 @@ void GraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
     this->cache.clear();
 }
 
-void GraphicalEntity::initialize(RenderGraphNode* node, RenderState* renderState) {
-    PipelineConstraints req = this->getPipelineRequirements();
-    this->pipelineData = node->configurationStore.getConfiguration(renderState, req, this);
-    this->dsa = new DescriptorSetArray(this->pipelineData.config->layoutReference);
-    uint32_t numDescriptors = renderState->ctx->swapChain.swapChainImages.size();
-    renderState->ctx->descriptorPoolManager.allocateDescriptorSets(renderState->ctx, this->dsa, numDescriptors);
-    this->postInit(node, renderState);
-}
-
-void GraphicalEntity::render(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex) {
-    if (this->numInstances == 0) {
-        return;
+void GraphicalConfigurationStore::addPass(RenderState* pass) {
+    if (this->subpassStores.count(pass) > 0) return;
+    std::vector<SubpassGraphicalConfigurationStore*> stores(pass->numSubpasses());
+    for (uint32_t i = 0; i < pass->numSubpasses(); i++) {
+        SubpassGraphicalConfigurationStore* store = new SubpassGraphicalConfigurationStore(pass->getNode(i));
+        this->addLinkedResource(store, true);
+        stores[i] = store;
+        pass->getNode(i)->setRenderCallback(store->getRenderCallback());
     }
-    this->preRender(renderState, frameIndex);
-    this->pipelineData.config->pipeline->bindDescriptorSet(commandBuffer, this->dsa, frameIndex, 0);
-    this->objectData->bind(commandBuffer, 0);
-    vkCmdDrawIndexed(commandBuffer, this->objectData->getNumIndices(), this->numInstances, 0, 0, 0);
-}
-
-void GraphicalEntity::destroyEntityResources(VulkanContext* ctx) {
-    this->dsa->destroy(ctx);
-    delete this->dsa;
-    this->pipelineData.store->freeConfiguration(ctx, this->pipelineData);
+    subpassStores[pass] = stores;
 }

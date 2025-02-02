@@ -1,5 +1,6 @@
 #include "Pipelines.h"
 
+#include "../utils/LeptonUtils.h"
 #include "ObjectData.h"
 #include "RenderState.h"
 #include "VulkanContext.h"
@@ -19,16 +20,16 @@ PipelineConstraints::PipelineConstraints(const PipelineConstraints& other) {
 }
 
 bool PipelineConstraints::compatible(const PipelineConstraints& other) {
-   if (strcmp(this->shaderName, other.shaderName) != 0) return false;
-   if (!DescriptorSetArray::isLayoutCompatible(this->layoutInfo.bindings, other.layoutInfo.bindings)) return false;
-   if (!this->vsd.equal(other.vsd)) return false;
-   if (this->samples != other.samples) return false;
-   if (this->useStencilTesting != other.useStencilTesting) return false;
-   if (this->useStencilTesting) throw std::runtime_error("Cannot yet compare stencil states.");
-   if (this->polygonMode != other.polygonMode) return false;
-   if (this->frontFace != other.frontFace) return false;
-   if (this->cullMode != other.cullMode) return false;
-   return true;
+    if (strcmp(this->shaderName, other.shaderName) != 0) return false;
+    if (!DescriptorSetArray::isLayoutCompatible(this->layoutInfo.bindings, other.layoutInfo.bindings)) return false;
+    if (!this->vsd.equal(other.vsd)) return false;
+    if (this->samples != other.samples) return false;
+    if (this->useStencilTesting != other.useStencilTesting) return false;
+    if (this->useStencilTesting) throw std::runtime_error("Cannot yet compare stencil states.");
+    if (this->polygonMode != other.polygonMode) return false;
+    if (this->frontFace != other.frontFace) return false;
+    if (this->cullMode != other.cullMode) return false;
+    return true;
 }
 
 VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std::vector<char>& code) {
@@ -48,10 +49,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
     char filename_buffer[combined_length + 1];
     snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
-    std::vector<char> vertex_code = readFile(std::string(filename_buffer));
+    std::vector<char> vertex_code = lepton2::utils::readFile(std::string(filename_buffer));
     this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
     snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
-    std::vector<char> fragment_code = readFile(std::string(filename_buffer));
+    std::vector<char> fragment_code = lepton2::utils::readFile(std::string(filename_buffer));
     this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
