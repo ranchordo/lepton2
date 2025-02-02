@@ -33,7 +33,7 @@ UniformBufferDescriptor::UniformBufferDescriptor(VulkanContext* ctx, DescriptorI
 }
 
 DescriptorWriteInfoContainer UniformBufferDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
-    DescriptorWriteInfoContainer ret;
+    DescriptorWriteInfoContainer ret{};
     ret.bufferInfo.buffer = uniformBuffer->buffer;
     ret.bufferInfo.offset = 0;
     ret.bufferInfo.range = this->uniformBufferSize;
@@ -221,7 +221,7 @@ void DescriptorPool::destroy_back(VulkanContext* ctx) {
     }
 }
 
-void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num) {
+void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, uint32_t num) {
     uint32_t uint_type = (uint32_t)descriptorInfo.descriptorType;
     if (this->typeCounts.count(uint_type) == 0) {
         this->typeCounts[uint_type] = 0;
@@ -232,7 +232,7 @@ void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, VkSha
         binding.binding = this->bindings.size();
         binding.descriptorType = descriptorInfo.descriptorType;
         binding.descriptorCount = 1;
-        binding.stageFlags = stageFlags;
+        binding.stageFlags = descriptorInfo.shaderStages;
         binding.pImmutableSamplers = nullptr;
         this->bindings.push_back(binding);
         this->descInfo.push_back(descriptorInfo);

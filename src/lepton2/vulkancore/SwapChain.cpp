@@ -6,7 +6,7 @@
 
 using namespace lepton2::vulkancore;
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
     for (const VkSurfaceFormatKHR& availableFormat : availableFormats) {
         if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
@@ -15,8 +15,7 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
     return availableFormats[0];  // TODO: Better ranking system.
 }
 
-VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
-    return VK_PRESENT_MODE_IMMEDIATE_KHR;  // FIXME: Stop this madness!
+static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
     for (const VkPresentModeKHR& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return availablePresentMode;
@@ -25,7 +24,7 @@ VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avai
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D chooseSwapExtent(VulkanContext* ctx, const VkSurfaceCapabilitiesKHR& capabilities) {
+static VkExtent2D chooseSwapExtent(VulkanContext* ctx, const VkSurfaceCapabilitiesKHR& capabilities) {
     if (capabilities.currentExtent.width != UINT32_MAX) {
         return capabilities.currentExtent;
     } else {
@@ -185,7 +184,7 @@ void SwapChain::destroy_back(VulkanContext* ctx) {
     vkDestroySwapchainKHR(ctx->device, this->swapChain, nullptr);
 }
 
-void SwapChain::rebuildSwapChain() {
+void SwapChain::deinitSwapChain() {
     if (this->renderState == nullptr) {
         throw std::runtime_error("Can't rebuild swap chain without building it first.");
     }
@@ -198,6 +197,10 @@ void SwapChain::rebuildSwapChain() {
 
     vkDeviceWaitIdle(ctx->device);
     this->destroy_back(this->ctx);
+}
+
+void SwapChain::rebuildSwapChain() {
+    this->deinitSwapChain();
     this->querySwapChain();
     this->buildSwapChain(this->renderState);
 }

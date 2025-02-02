@@ -3,6 +3,11 @@
 #include "RenderState.h"
 #include "VulkanContext.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../external/stb_image.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "../../external/tiny_obj_loader.h"
+
 namespace lepton2::vulkancore {
 
 uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties) {

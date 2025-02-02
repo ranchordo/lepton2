@@ -29,34 +29,39 @@ class GraphicalConfigurationStore : public DeletableVulkanResource {
     GraphicalConfigurationStore(RenderGraphNode* node) {
         this->parent = node;
     }
-    GraphicalConfigurationHandle getConfiguration(RenderState* renderState, PipelineInfo pipelineInfo, GraphicalEntity* user);
+    GraphicalConfigurationHandle getConfiguration(RenderState* renderState, PipelineConstraints constraints, GraphicalEntity* user);
     void freeConfiguration(VulkanContext* ctx, GraphicalConfigurationHandle configuration);
     void renderAllConfigurations(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex);
     void destroy_back(VulkanContext* ctx) override;
 
    private:
-    GraphicalConfiguration* createNewConfiguration(RenderState* renderState, PipelineInfo pipelineInfo);
+    GraphicalConfiguration* createNewConfiguration(RenderState* renderState, PipelineConstraints constraints);
     std::unordered_map<std::string, std::unordered_set<GraphicalConfiguration*>> cache;
     uint32_t currentIdentifier;
     RenderGraphNode* parent;
 };
 
 class GraphicalEntity : public DeletableVulkanResource {
-   public: // FIXME: Figure out what we can make private
-    DescriptorSetArray* dsa;
-    GraphicalConfigurationHandle pipelineData;
-    DeviceObjectData* objectData = nullptr;
-    virtual PipelineInfo getPipelineRequirements() = 0;
-    virtual void postInit(RenderGraphNode* node, RenderState* renderState) {}
-    virtual void preRender(RenderState* renderState, uint32_t descriptorIndex) {}
-    uint32_t numInstances = 1;
-
-    void initialize(RenderGraphNode* node, RenderState* renderState, uint32_t numDescriptors);
+   public:
+    void initialize(RenderGraphNode* node, RenderState* renderState);
     void render(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex);
 
     void destroyEntityResources(VulkanContext* ctx);
     virtual void destroy_back(VulkanContext* ctx) override {
         this->destroyEntityResources(ctx);
     }
+
+    DescriptorSetArray* dsa; // FIXME: No
+
+   protected:
+    virtual void postInit(RenderGraphNode* node, RenderState* renderState) {}
+    virtual PipelineConstraints getPipelineRequirements() = 0;
+    virtual void preRender(RenderState* renderState, uint32_t descriptorIndex) {}
+    void setObjectData(DeviceObjectData* objectData) { this->objectData = objectData; }
+
+   private:
+    GraphicalConfigurationHandle pipelineData;
+    DeviceObjectData* objectData = nullptr;
+    uint32_t numInstances = 1;
 };
 }  // namespace lepton2::vulkancore

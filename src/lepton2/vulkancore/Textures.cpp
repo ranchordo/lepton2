@@ -2,9 +2,6 @@
 
 #include "VulkanContext.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../external/stb_image.h"
-
 using namespace lepton2::vulkancore;
 
 TextureComponent::TextureComponent(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height) {

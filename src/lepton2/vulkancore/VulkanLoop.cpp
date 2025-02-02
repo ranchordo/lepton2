@@ -62,6 +62,7 @@ void VulkanLoop::process() {
 
     ctx->swapChain.updateViewportScissor(ifr->commandBuffer);
 
+    for (VulkanLoopModifier* loopmod : this->loopModifiers) { loopmod->preRender(swapChainFrame.index); }
     renderState->begin(ifr->commandBuffer, swapChainFrame);
     renderState->renderAll(ifr->commandBuffer, swapChainFrame);
     renderState->end(ifr->commandBuffer);

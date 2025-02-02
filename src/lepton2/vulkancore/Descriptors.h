@@ -23,6 +23,7 @@ struct DescriptorInfo {
         Texture* container;
         uint32_t componentIndex;
     } imageSamplerData;
+    VkShaderStageFlags shaderStages = VK_SHADER_STAGE_ALL_GRAPHICS;
 };
 
 struct DescriptorWriteInfoContainer {
@@ -115,7 +116,7 @@ struct DescriptorSetLayoutInfo {
     std::unordered_map<uint32_t, uint32_t> typeCounts;
     std::vector<VkDescriptorSetLayoutBinding> bindings;
     std::vector<DescriptorInfo> descInfo;
-    void addNewBinding(DescriptorInfo descriptorInfo, VkShaderStageFlags stageFlags, uint32_t num = 1);
+    void addNewBinding(DescriptorInfo descriptorInfo, uint32_t num = 1);
 };
 
 class DescriptorSetArray : public DeletableVulkanResource {

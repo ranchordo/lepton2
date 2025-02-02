@@ -35,12 +35,20 @@ assets: $(SHADER_SPIRV)
 clean:
 	rm -rf build
 
+clean_aux:
+	mkdir -p build/o/lepton2/vulkancore
+	mkdir -p rmtemp
+	mv build/* rmtemp/
+	mkdir -p build/o/lepton2
+	mv rmtemp/o/lepton2/* build/o/lepton2/
+	rm -rf rmtemp
+
 # Test native build #
 
 test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV
 test: LDFLAGS = $(BASELDFLAGS)
 test: OUTPUT = build/output/lepton2_main
-test: clean build-base assets
+test: build-base assets
 	@echo Launching $(OUTPUT)...
 	@./$(OUTPUT)
 

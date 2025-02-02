@@ -38,6 +38,8 @@ class SwapChain : public DeletableVulkanResource {
     void destroy_back(VulkanContext* ctx) override;
     void querySwapChain();
     void buildSwapChain(RenderState* renderState);
+    // Only used for manual rebuilding
+    void deinitSwapChain();
     void rebuildSwapChain();
     std::unordered_set<DescriptorSetUpdateInfo*> descriptorUpdates;
 

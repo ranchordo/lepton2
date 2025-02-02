@@ -70,6 +70,23 @@ void RenderGraphNode::requestDepthAsInput(uint32_t index) {
     this->depthInputRequest = index;
 }
 
+void RenderGraphNode::setupSubpassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli) {
+    this->removeSubpassDescriptorSet(ctx);
+    this->subpassDsa = new DescriptorSetArray(dsli);
+    this->addLinkedResource(subpassDsa, true);
+    this->subpassDsa->buildDescriptorSetLayout(ctx);
+    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->subpassDsa, ctx->swapChain.swapChainImages.size());
+}
+
+void RenderGraphNode::removeSubpassDescriptorSet(VulkanContext* ctx) {
+    if (this->subpassDsa != nullptr) {
+        this->removeLinkedResource(this->subpassDsa);
+        this->subpassDsa->destroy(ctx);
+        delete this->subpassDsa;
+        this->subpassDsa = nullptr;
+    }
+}
+
 void RenderGraphNode::destroy_back(VulkanContext* ctx) {
     // Nothing get
 }
@@ -98,6 +115,9 @@ void RenderState::begin(VkCommandBuffer commandBuffer, SwapChainFrame swapChainF
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    if (this->passDsa != nullptr) {
+        this->dsaQueue.push_back({2, this->passDsa});
+    }
 }
 
 void RenderState::renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
@@ -105,6 +125,9 @@ void RenderState::renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapCh
         RenderGraphNode* node = this->nodes[i];
         if (i != 0) {
             vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+        }
+        if (node->getSubpassDsa() != nullptr) {
+            this->dsaQueue.push_back({1, node->getSubpassDsa()});
         }
         node->configurationStore.renderAllConfigurations(this, commandBuffer, swapChainFrame.index);
     }
@@ -120,11 +143,28 @@ void RenderState::destroy_back(VulkanContext* ctx) {
     }
 }
 
+void RenderState::setupPassDescriptorSet(DescriptorSetLayoutInfo dsli) {
+    this->removePassDescriptorSet();
+    this->passDsa = new DescriptorSetArray(dsli);
+    this->addLinkedResource(passDsa, true);
+    this->passDsa->buildDescriptorSetLayout(ctx);
+    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->passDsa, ctx->swapChain.swapChainImages.size());
+}
+
+void RenderState::removePassDescriptorSet() {
+    if (this->passDsa != nullptr) {
+        this->removeLinkedResource(this->passDsa);
+        this->passDsa->destroy(ctx);
+        delete this->passDsa;
+        this->passDsa = nullptr;
+    }
+}
+
 RenderGraph::RenderGraph(VulkanContext* ctx) {
     this->ctx = ctx;
 }
 
-RenderGraphNode* RenderGraph::getTerminatingNode() {
+RenderGraphNode* RenderGraph::buildPresentingNode() {
     this->terminator = new RenderGraphNode(ctx, true);
     this->nodes.push_back(this->terminator);
     return this->terminator;

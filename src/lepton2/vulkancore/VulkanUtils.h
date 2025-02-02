@@ -39,6 +39,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "../../external/stb_image.h"
+#include "../../external/tiny_obj_loader.h"
+
 #define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
 #define EXTDoProxy(name, ...) ((EXTBuildProxyFuncptr(name) == nullptr) ? (VK_ERROR_EXTENSION_NOT_PRESENT) : (EXTBuildProxyFuncptr(name)(__VA_ARGS__)))
 #define EXTDoVoidProxy(name, ...)                \
@@ -91,6 +94,15 @@ class DeletableVulkanResource {
     void addLinkedResource(DeletableVulkanResource* linked, bool deleteptr) {
         std::pair<bool, DeletableVulkanResource*> pair(deleteptr, linked);
         this->linked.push_back(pair);
+    }
+    bool removeLinkedResource(DeletableVulkanResource* resource) {
+        for (uint32_t i = 0; i < linked.size(); i++) {
+            if (linked[i].second == resource) {
+                linked.erase(linked.begin() + i);
+                return true;
+            }
+        }
+        return false;
     }
     virtual ~DeletableVulkanResource() {}
 

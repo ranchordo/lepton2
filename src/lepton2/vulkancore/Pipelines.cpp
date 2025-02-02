@@ -6,35 +6,29 @@
 
 using namespace lepton2::vulkancore;
 
-PipelineInfo::PipelineInfo(const char* _shaderName,
-                           DescriptorSetLayoutInfo _dsaLayout,
-                           DescriptorSetArray* _dsaLayoutReference,
-                           VkSampleCountFlagBits _samples, VkBool32 _useStencilTesting,
-                           VkStencilOpState _stencilState, VkPolygonMode _polygonMode,
-                           VkFrontFace _frontFace, VkCullModeFlags _cullMode) {
-    this->shaderName = _shaderName;
-    this->dsaLayout = _dsaLayout;
-    this->samples = _samples;
-    this->useStencilTesting = _useStencilTesting;
-    this->stencilState = _stencilState;
-    this->polygonMode = _polygonMode;
-    this->frontFace = _frontFace;
-    this->cullMode = _cullMode;
-    if (_dsaLayoutReference != nullptr) {
-        this->descriptorSetLayout = _dsaLayoutReference->descriptorSetLayout;
-    }
-}
-
-PipelineInfo::PipelineInfo(const PipelineInfo& other) {
+PipelineConstraints::PipelineConstraints(const PipelineConstraints& other) {
     this->shaderName = other.shaderName;
-    this->dsaLayout = other.dsaLayout;
+    this->layoutInfo = other.layoutInfo;
+    this->vsd = other.vsd;
     this->samples = other.samples;
     this->useStencilTesting = other.useStencilTesting;
     this->stencilState = other.stencilState;
     this->polygonMode = other.polygonMode;
     this->frontFace = other.frontFace;
     this->cullMode = other.cullMode;
-    this->descriptorSetLayout = other.descriptorSetLayout;
+}
+
+bool PipelineConstraints::compatible(const PipelineConstraints& other) {
+   if (strcmp(this->shaderName, other.shaderName) != 0) return false;
+   if (!DescriptorSetArray::isLayoutCompatible(this->layoutInfo.bindings, other.layoutInfo.bindings)) return false;
+   if (!this->vsd.equal(other.vsd)) return false;
+   if (this->samples != other.samples) return false;
+   if (this->useStencilTesting != other.useStencilTesting) return false;
+   if (this->useStencilTesting) throw std::runtime_error("Cannot yet compare stencil states.");
+   if (this->polygonMode != other.polygonMode) return false;
+   if (this->frontFace != other.frontFace) return false;
+   if (this->cullMode != other.cullMode) return false;
+   return true;
 }
 
 VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std::vector<char>& code) {
@@ -49,14 +43,14 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
     return shaderModule;
 }
 
-GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass, PipelineInfo cInfo) : creationInfo(cInfo) {
-    this->creationInfo.descriptorSetLayout = VK_NULL_HANDLE;  // Don't keep old pointers
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
+GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass,
+                                   const PipelineInfo& cInfo) : creationConstraints(cInfo.constraints) {
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
     char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
     std::vector<char> vertex_code = readFile(std::string(filename_buffer));
     this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", ctx->shaders_spirv_load_path, cInfo.shaderName);
+    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
     std::vector<char> fragment_code = readFile(std::string(filename_buffer));
     this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
 
@@ -85,13 +79,11 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     dynamicState.pDynamicStates = dynamicStates.data();
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescriptions.size());
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+    vertexInputInfo.pVertexBindingDescriptions = &cInfo.vsdBindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(cInfo.vsdAttributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = cInfo.vsdAttributeDescriptions.data();
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -106,10 +98,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = cInfo.polygonMode;
+    rasterizer.polygonMode = cInfo.constraints.polygonMode;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = cInfo.cullMode;
-    rasterizer.frontFace = cInfo.frontFace;
+    rasterizer.cullMode = cInfo.constraints.cullMode;
+    rasterizer.frontFace = cInfo.constraints.frontFace;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
@@ -118,7 +110,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = cInfo.samples;
+    multisampling.rasterizationSamples = cInfo.constraints.samples;
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr;
     multisampling.alphaToCoverageEnable = VK_FALSE;
@@ -145,8 +137,8 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &cInfo.descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = (uint32_t)(cInfo.setLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = cInfo.setLayouts.data();
 
     if (vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout.");
@@ -160,9 +152,9 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.minDepthBounds = 0.0f;
     depthStencil.maxDepthBounds = 1.0f;
-    depthStencil.stencilTestEnable = cInfo.useStencilTesting;
-    depthStencil.back = cInfo.stencilState;
-    depthStencil.front = cInfo.stencilState;
+    depthStencil.stencilTestEnable = cInfo.constraints.useStencilTesting;
+    depthStencil.back = cInfo.constraints.stencilState;
+    depthStencil.front = cInfo.constraints.stencilState;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -191,8 +183,8 @@ void GraphicsPipeline::bind(VkCommandBuffer commandBuffer) {
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
 }
 
-void GraphicsPipeline::bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index) {
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &dsa->singleDescriptorSets[index].descriptorSet, 0, nullptr);
+void GraphicsPipeline::bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index, uint32_t setidx) {
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, setidx, 1, &dsa->singleDescriptorSets[index].descriptorSet, 0, nullptr);
 }
 
 void GraphicsPipeline::destroy_back(VulkanContext* ctx) {

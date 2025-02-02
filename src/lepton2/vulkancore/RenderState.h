@@ -38,6 +38,9 @@ class RenderGraphNode : public DeletableVulkanResource {
         return &this->colorAttachments;
     }
     GraphicalConfigurationStore configurationStore;
+    void setupSubpassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
+    void removeSubpassDescriptorSet(VulkanContext* ctx);
+    DescriptorSetArray* getSubpassDsa() { return this->subpassDsa; }
 
    private:
     RenderGraphNode();
@@ -55,12 +58,14 @@ class RenderGraphNode : public DeletableVulkanResource {
     uint32_t depthInputRequest = UINT32_MAX;
     // std::vector<std::pair<uint32_t, RenderGraphNode*>> outputs;
     std::unordered_map<uint32_t, std::pair<uint32_t, RenderGraphNode*>> inputs;
+    DescriptorSetArray* subpassDsa = nullptr;
 
     friend class RenderGraph;
 };
 
 class RenderGraph;
 
+// FIXME: Misnamed, represents a single render pass actually.
 class RenderState : public DeletableVulkanResource {
    public:
     VkRenderPass renderPass = VK_NULL_HANDLE;
@@ -73,15 +78,22 @@ class RenderState : public DeletableVulkanResource {
     VkClearValue depthStencilClearValue = {1.0f, 0};
     VulkanContext* ctx = nullptr;
 
+    void setupPassDescriptorSet(DescriptorSetLayoutInfo dsli);
+    void removePassDescriptorSet();
+    DescriptorSetArray* getPassDsa() { return this->passDsa; }
+
+    std::vector<std::pair<uint32_t, DescriptorSetArray*>> dsaQueue;
+
    private:
     std::vector<RenderGraphNode*> nodes;
+    DescriptorSetArray* passDsa;
     friend class RenderGraph;
 };
 
 class RenderGraph : public DeletableVulkanResource {
    public:
     RenderGraph(VulkanContext* ctx);
-    RenderGraphNode* getTerminatingNode();
+    RenderGraphNode* buildPresentingNode();
     RenderGraphNode* buildNewNode();
     RenderState* buildRenderState();
     void destroy_back(VulkanContext* ctx) override;

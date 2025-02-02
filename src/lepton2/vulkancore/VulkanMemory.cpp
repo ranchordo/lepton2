@@ -161,13 +161,17 @@ void VulkanAllocationManager::deleteEntry(MemoryChonkus* chonkus, MemoryChonklet
         printf("First-element case deletion!\n");
 #endif
         chonkus->entry = entry->next;
-        entry->next->prev = nullptr;
+        if (entry->next != nullptr) {
+            entry->next->prev = nullptr;
+        }
     } else {
 #ifdef DEBUG_MEMORY_MANAGER
         printf("Not first-element case deletion!\n");
 #endif
         entry->prev->next = entry->next;
-        entry->next->prev = entry->prev;
+        if (entry->next != nullptr) {
+            entry->next->prev = entry->prev;
+        }
     }
     delete entry;
 }
@@ -275,7 +279,9 @@ void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
         current = current->next;
     }
     chonklet.chonkus->entry = nEntry;
-    nEntry->next->prev = nEntry;
+    if (nEntry->next != nullptr) {
+        nEntry->next->prev = nEntry;
+    }
 #ifdef DEBUG_MEMORY_MANAGER
     printf("After insertion: ");
     printFreeList(chonklet.chonkus);

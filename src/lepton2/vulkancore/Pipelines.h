@@ -1,44 +1,57 @@
 #pragma once
 
 #include "Descriptors.h"
+#include "ObjectData.h"
 #include "VulkanUtils.h"
 
 namespace lepton2::vulkancore {
 class RenderGraphNode;
 
-// You have become the very thing you swore to destroy.
-// But I mean we do have these sweet sweet default params
-struct PipelineInfo {
-    PipelineInfo(const char* shaderName,
-                 DescriptorSetLayoutInfo dsaLayout,
-                 DescriptorSetArray* dsaLayoutReference,
-                 VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
-                 VkBool32 useStencilTesting = VK_FALSE,
-                 VkStencilOpState stencilState = {},
-                 VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL,
-                 VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                 VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT);
-    PipelineInfo(const PipelineInfo& other);
+struct PipelineConstraints {
+    PipelineConstraints(const char* _shaderName,
+                        DescriptorSetLayoutInfo _layoutInfo,
+                        VertexStructDescriptor _vsd) {
+        this->shaderName = _shaderName;
+        this->layoutInfo = _layoutInfo;
+        this->vsd = _vsd;
+    }
+    PipelineConstraints(const PipelineConstraints& other);
     const char* shaderName;
-    DescriptorSetLayoutInfo dsaLayout;
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    VkSampleCountFlagBits samples;
-    VkBool32 useStencilTesting;
-    VkStencilOpState stencilState;
-    VkPolygonMode polygonMode;
-    VkFrontFace frontFace;
-    VkCullModeFlags cullMode;
+    DescriptorSetLayoutInfo layoutInfo;
+    VertexStructDescriptor vsd;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    VkBool32 useStencilTesting = VK_FALSE;
+    VkStencilOpState stencilState = {};
+    VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
+    VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
+
+    bool compatible(const PipelineConstraints& other);
+};
+
+struct PipelineInfo {
+    PipelineInfo(std::vector<VkDescriptorSetLayout> dsl,
+                 PipelineConstraints& constraints) : constraints(constraints) {
+        this->setLayouts = dsl;
+        this->vsdBindingDescription = constraints.vsd.getBindingDescription();
+        this->vsdAttributeDescriptions = constraints.vsd.getAttributeDescriptions();
+    }
+
+    std::vector<VkDescriptorSetLayout> setLayouts;
+    PipelineConstraints constraints;
+    VkVertexInputBindingDescription vsdBindingDescription;
+    std::vector<VkVertexInputAttributeDescription> vsdAttributeDescriptions;
 };
 
 class GraphicsPipeline : public DeletableVulkanResource {
    public:
     GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex,
-                     VkRenderPass renderPass, PipelineInfo cInfo);
+                     VkRenderPass renderPass, const PipelineInfo& cInfo);
     void bind(VkCommandBuffer commandBuffer);
     VkPipeline getPipeline() { return this->pipeline; }
-    void bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index);
+    void bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index, uint32_t setidx);
     void destroy_back(VulkanContext* ctx) override;
-    PipelineInfo creationInfo;
+    PipelineConstraints creationConstraints;
     VkPipelineLayout getPipelineLayout() {
         return this->pipelineLayout;
     }

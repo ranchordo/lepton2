@@ -2,46 +2,47 @@
 
 using namespace lepton2::vulkancore;
 
-VkVertexInputBindingDescription Vertex::getBindingDescription() {
+bool VertexStructDescriptor::equal(const VertexStructDescriptor& other) {
+    if (this->size != other.size) return false;
+    for (uint32_t i = 0; i < members.size(); i++) {
+        if (members[i].first != other.members[i].first) return false;
+        if (members[i].second != other.members[i].second) return false;
+    }
+    return true;
+}
+
+VkVertexInputBindingDescription VertexStructDescriptor::getBindingDescription() {
     VkVertexInputBindingDescription bindingDescription{};
     bindingDescription.binding = 0;
-    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.stride = (uint32_t)this->size;
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     return bindingDescription;
 }
 
-std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions() {
-    std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
+std::vector<VkVertexInputAttributeDescription> VertexStructDescriptor::getAttributeDescriptions() {
+    std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
     VkVertexInputAttributeDescription viad{};
-    viad.binding = 0;
-    viad.location = 0;
-    viad.format = VK_FORMAT_R32G32B32_SFLOAT;
-    viad.offset = offsetof(Vertex, pos);
-    attributeDescriptions.push_back(viad);
-    viad.binding = 0;
-    viad.location = 1;
-    viad.format = VK_FORMAT_R32G32B32_SFLOAT;
-    viad.offset = offsetof(Vertex, color);
-    attributeDescriptions.push_back(viad);
-    viad.binding = 0;
-    viad.location = 2;
-    viad.format = VK_FORMAT_R32G32_SFLOAT;
-    viad.offset = offsetof(Vertex, texCoord);
-    attributeDescriptions.push_back(viad);
+    for (uint32_t i = 0; i < this->members.size(); i++) {
+        viad.binding = 0;
+        viad.location = i;
+        viad.format = this->members[i].second;
+        viad.offset = this->members[i].first;
+        attributeDescriptions.push_back(viad);
+    }
     return attributeDescriptions;
 }
 
-void DeviceObjectData::copyVertexBuffer(VulkanContext* ctx, const std::vector<Vertex>& hostVertices) {
-    if (hostVertices.size() != this->numVertices) {
+void DeviceObjectData::copyVertexBuffer(VulkanContext* ctx, void* vertices, size_t vsize) {
+    if (vsize != this->vsize) {
         throw std::runtime_error("Must keep consistent vertex size when updating device data.");
     }
     VulkanBuffer stagingBuffer;
-    VkDeviceSize bufferSize = sizeof(Vertex) * hostVertices.size();
+    VkDeviceSize bufferSize = vsize;
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     createBuffer(ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, properties, &stagingBuffer);
     void* data = stagingBuffer.chonklet.mapMemory(ctx, 0);
     {
-        memcpy(data, hostVertices.data(), (size_t)bufferSize);
+        memcpy(data, vertices, (size_t)bufferSize);
     }
     stagingBuffer.chonklet.unmapMemory(ctx);
     copyBuffer(ctx, &stagingBuffer, &vertexBuffer, bufferSize);
@@ -65,24 +66,24 @@ void DeviceObjectData::copyIndexBuffer(VulkanContext* ctx, const std::vector<uin
     stagingBuffer.destroy(ctx);
 }
 
-void DeviceObjectData::createBuffers(VulkanContext* ctx, uint32_t numVertices, uint32_t numIndices) {
-    VkDeviceSize vertexBufferSize = sizeof(Vertex) * numVertices;
+void DeviceObjectData::createBuffers(VulkanContext* ctx, size_t vsize, uint32_t numIndices) {
+    VkDeviceSize vertexBufferSize = vsize;
     VkDeviceSize indexBufferSize = sizeof(uint32_t) * numIndices;
     VkBufferUsageFlags vertexBufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     createBuffer(ctx, vertexBufferSize, vertexBufferUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->vertexBuffer);
     VkBufferUsageFlags indexBufferUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     createBuffer(ctx, indexBufferSize, indexBufferUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &this->indexBuffer);
     this->numIndices = numIndices;
-    this->numVertices = numVertices;
+    this->vsize = vsize;
 }
 
-void DeviceObjectData::updateDeviceData(VulkanContext* ctx, const HostObjectData& hostData) {
-    this->copyVertexBuffer(ctx, hostData.vertices);
-    this->copyIndexBuffer(ctx, hostData.indices);
+void DeviceObjectData::updateDeviceData(VulkanContext* ctx, HostObjectData* hostData) {
+    this->copyVertexBuffer(ctx, hostData->vertices, hostData->vsize);
+    this->copyIndexBuffer(ctx, hostData->indices);
 }
 
-DeviceObjectData::DeviceObjectData(VulkanContext* ctx, const HostObjectData& hostData) {
-    this->createBuffers(ctx, hostData.vertices.size(), hostData.indices.size());
+DeviceObjectData::DeviceObjectData(VulkanContext* ctx, HostObjectData* hostData) {
+    this->createBuffers(ctx, hostData->vsize, hostData->indices.size());
     this->updateDeviceData(ctx, hostData);
 }
 
