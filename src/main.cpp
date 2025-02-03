@@ -1,5 +1,7 @@
 #include "lepton2/graphics/GraphicalEntity.h"
 #include "lepton2/graphics/GraphicalPresets.h"
+#include "lepton2/utils/InputHandler.h"
+#include "lepton2/utils/LeptonUtils.h"
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
 #include "lepton2/vulkancore/RenderState.h"
@@ -8,11 +10,11 @@
 #include "lepton2/vulkancore/VulkanLoop.h"
 #include "lepton2/vulkancore/VulkanMemory.h"
 #include "lepton2/vulkancore/VulkanUtils.h"
-#include "lepton2/utils/LeptonUtils.h"
 
 using namespace lepton2::vulkancore;
 using namespace lepton2::utils;
 using namespace lepton2::graphics;
+using namespace lepton2::graphics::graphicalpresets;
 
 // TODO: Investigate push_back and see if we can switch to static sizing in some places (namely RenderState et al.)
 // TODO: Investigate persistent mapping
@@ -107,58 +109,13 @@ int main(int argc, char** argv) {
     texture->addTextureComponent(ctx, "texture.png");
     sceneContainer.addLinkedResource(texture, true);
 
-    class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
-       public:
-        void _create(VulkanContext* ctx, DeviceObjectData* objectData, float rotationSpeed, float zpos, Texture* texture) {
-            this->setObjectData(objectData);
-            this->rotationSpeed = rotationSpeed;
-            this->textureContainer = texture;
-            this->zpos = zpos;
-        }
-        PipelineConstraints getPipelineRequirements() override {
-            DescriptorSetLayoutInfo dsli;
-            {
-                DescriptorInfo descInfo;
-                descInfo.uniformBufferData.bufferSize = sizeof(ModelUniformBufferObject);
-                descInfo.uniformBufferData.createNewBuffer = true;
-                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                descInfo.shaderStages = VK_SHADER_STAGE_VERTEX_BIT;
-                dsli.addNewBinding(descInfo);
-            }
-            {
-                DescriptorInfo descInfo;
-                descInfo.imageSamplerData.container = this->textureContainer;
-                descInfo.imageSamplerData.componentIndex = 0;
-                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
-                dsli.addNewBinding(descInfo);
-            }
-            PipelineConstraints req("shader", dsli, vsd);
-            return req;
-        }
-        void postInit(RenderGraphNode* node, RenderState* renderState) override {
-            this->start_time_point = startTiming();
-        }
-        void preRender(RenderState* renderState, uint32_t descriptorIndex) override {
-            ModelUniformBufferObject ubo{};
-            float elapsedSeconds = (float)getElapsedSeconds(start_time_point);
-            ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, zpos + sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
-            ubo.model = glm::rotate(ubo.model, elapsedSeconds * this->rotationSpeed, glm::vec3(0, 0, 1));
-            VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(dsa->singleDescriptorSets[descriptorIndex].instances[0]))->uniformBuffer;
-            void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
-            memcpy(data, &ubo, sizeof(ModelUniformBufferObject));
-            uniformBuffer->chonklet.unmapMemory(ctx);
-        }
-        void destroy_back(VulkanContext* ctx) override {
-            this->destroyEntityResources(ctx);
-        }
+    HostObjectData* model = loadObjFile(ctx, "viking_room.obj");
+    DeviceObjectData* objectData = new DeviceObjectData(ctx, model);
+    model->destroy(ctx);
+    delete model;
 
-       private:
-        lepton2_time_point start_time_point;
-        float rotationSpeed;
-        float zpos;
-        Texture* textureContainer;
-    } rectangleEntity;
+    GenericSinglyTextured entity(ctx, "shader", objectData, texture);
+    entity.addLinkedResource(objectData, true);
 
     DescriptorSetLayoutInfo subpassDSLI;
     {
@@ -175,21 +132,15 @@ int main(int argc, char** argv) {
     sceneContainer.addLinkedResource(hostData, true);
     DeviceObjectData* devData = new DeviceObjectData(ctx, hostData);
     sceneContainer.addLinkedResource(devData, true);
-    rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
-    rectangleEntity.initialize(store, node, renderState);
-    sceneContainer.addLinkedResource(&rectangleEntity, false);
-
-    decltype(rectangleEntity) rectangleEntity1;
-    rectangleEntity1._create(ctx, devData, glm::radians(-90.0f), -0.2f, texture);
-    rectangleEntity1.initialize(store, node, renderState);
-    sceneContainer.addLinkedResource(&rectangleEntity1, false);
+    entity.initialize(store, node, renderState);
+    sceneContainer.addLinkedResource(&entity, false);
 
     // graphicalpresets::StaticScreenEntity screenEntity(ctx, "prshader", &node1->getColorAttachments()->at(0));
     // screenEntity.initialize(node, renderState);
     // sceneContainer.addLinkedResource(&screenEntity, false);
 
     SubpassUniformBufferObject subo{};
-    subo.view = glm::lookAt(glm::vec3(1, 1, 0.5), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
+    subo.view = glm::lookAt(glm::vec3(1, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
     subo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
     subo.proj[1][1] *= -1;
 
@@ -216,6 +167,8 @@ int main(int argc, char** argv) {
     mainLoop.addLinkedResource(&sceneContainer, false);
     mainLoop.addLoopModifier(&suboloopmodifier);
 
+    InputHandler input(ctx->window);
+
     glfwSetInputMode(ctx->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     mainLoop.initialize();
@@ -224,6 +177,26 @@ int main(int argc, char** argv) {
         auto time_point = startTiming();
         mainLoop.process();
         double fp = getElapsedSeconds(time_point);
+        {  // Movement
+            if (input.keyPressed(GLFW_KEY_W)) {
+                subo.view = glm::translate(subo.view, glm::vec3(fp, 0, 0));
+            }
+            if (input.keyPressed(GLFW_KEY_S)) {
+                subo.view = glm::translate(subo.view, glm::vec3(-fp, 0, 0));
+            }
+            if (input.keyPressed(GLFW_KEY_A)) {
+                subo.view = glm::translate(subo.view, glm::vec3(0, fp, 0));
+            }
+            if (input.keyPressed(GLFW_KEY_D)) {
+                subo.view = glm::translate(subo.view, glm::vec3(0, -fp, 0));
+            }
+            if (input.keyPressed(GLFW_KEY_SPACE)) {
+                subo.view = glm::translate(subo.view, glm::vec3(0, 0, -fp));
+            }
+            if (input.keyPressed(GLFW_KEY_LEFT_SHIFT)) {
+                subo.view = glm::translate(subo.view, glm::vec3(0, 0, fp));
+            }
+        }
         if (frame_count % 1000 == 0) {
             printf("Interval (μs): %lf\n", fp * 1000000);
             printf("Framerate (fps): %lf\n", 1 / fp);

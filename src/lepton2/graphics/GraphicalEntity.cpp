@@ -19,7 +19,7 @@ void GraphicalEntity::render(RenderState* renderState, VkCommandBuffer commandBu
     if (this->numInstances == 0) {
         return;
     }
-    this->preRender(renderState, frameIndex);
+    this->preRender(renderState, &dsa->singleDescriptorSets[frameIndex], frameIndex);
     this->pipelineData.config->pipeline->bindDescriptorSet(commandBuffer, this->dsa, frameIndex, 0);
     this->objectData->bind(commandBuffer, 0);
     vkCmdDrawIndexed(commandBuffer, this->objectData->getNumIndices(), this->numInstances, 0, 0, 0);

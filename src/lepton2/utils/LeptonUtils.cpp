@@ -1,5 +1,11 @@
 #include "LeptonUtils.h"
 
+#include "../external/tiny_obj_loader.h"
+#include "../graphics/GraphicalPresets.h"
+
+using namespace lepton2::vulkancore;
+using namespace lepton2::graphics::graphicalpresets;
+
 namespace lepton2::utils {
 
 lepton2_time_point startTiming() {
@@ -34,4 +40,44 @@ std::vector<char> readFile(const std::string& filename) {
     return buffer;
 }
 
-} // namespace lepton2::utils
+HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s", ctx->assets_load_path, filename);
+    char filename_buffer[combined_length + 1];
+    snprintf(filename_buffer, combined_length + 1, "%s/%s", ctx->assets_load_path, filename);
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string err;
+    std::vector<uint32_t> indices;
+    std::vector<SimplePresetVertex> vertices;
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename_buffer)) {
+        throw std::runtime_error(err);
+    }
+
+    std::unordered_map<SimplePresetVertex, uint32_t> unique{};
+
+    for (const tinyobj::shape_t& shape : shapes) {
+        for (const tinyobj::index_t& index : shape.mesh.indices) {
+            SimplePresetVertex vertex{};
+            vertex.pos = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+            vertex.texcoord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+            };
+            if (unique.count(vertex) == 0) {
+                unique[vertex] = (uint32_t)(vertices.size());
+                vertices.push_back(vertex);
+            }
+            indices.push_back(unique[vertex]);
+        }
+    }
+
+    HostObjectData* ret = new HostObjectData(vertices.data(), vertices.size() * sizeof(SimplePresetVertex), indices);
+    return ret;
+}
+
+}  // namespace lepton2::utils

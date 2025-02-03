@@ -19,17 +19,17 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
         this->destroyEntityResources(ctx);
     }
 
-    vkc::DescriptorSetArray* dsa; // FIXME: No
-
    protected:
     virtual void postInit(vkc::RenderGraphNode* node, vkc::RenderState* renderState) {}
     virtual vkc::PipelineConstraints getPipelineRequirements() = 0;
-    virtual void preRender(vkc::RenderState* renderState, uint32_t descriptorIndex) {}
+    virtual void preRender(vkc::RenderState* renderState, vkc::SingleDescriptorSet* sds, uint32_t scfi) {}
     void setObjectData(vkc::DeviceObjectData* objectData) { this->objectData = objectData; }
 
    private:
     GraphicalConfigurationHandle pipelineData;
     vkc::DeviceObjectData* objectData = nullptr;
     uint32_t numInstances = 1;
+    vkc::DescriptorSetArray* dsa;
 };
+
 }  // namespace lepton2::graphics

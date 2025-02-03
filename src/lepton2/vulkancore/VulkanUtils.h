@@ -28,6 +28,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 #include <list>
 #include <optional>
 #include <stdexcept>
@@ -36,8 +38,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../../external/stb_image.h"
-#include "../../external/tiny_obj_loader.h"
+#include "../external/stb_image.h"
+#include "../external/tiny_obj_loader.h"
 
 #define CHECK_DESTRUCTION(status) \
     {                             \

@@ -4,9 +4,9 @@
 #include "VulkanContext.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "../../external/stb_image.h"
+#include "../external/stb_image.h"
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "../../external/tiny_obj_loader.h"
+#include "../external/tiny_obj_loader.h"
 
 namespace lepton2::vulkancore {
 
