@@ -22,7 +22,9 @@ void MemoryChonklet::destroy_back(VulkanContext* ctx) {
 
 void* MemoryChonklet::mapMemory(VulkanContext* ctx, VkMemoryMapFlags flags) {
     void* ret;
-    if (vkMapMemory(ctx->device, chonkus->memory, offset, size, flags, &ret) != VK_SUCCESS) {
+    VkDeviceSize rOffset = offset + alignmentPadding;
+    VkDeviceSize rSize = size - alignmentPadding;
+    if (vkMapMemory(ctx->device, chonkus->memory, rOffset, rSize, flags, &ret) != VK_SUCCESS) {
         throw std::runtime_error("Failed to map memory.");
     }
     return ret;
@@ -62,7 +64,7 @@ VkDeviceSize getNewSize(VkDeviceSize reqAllocSize) {
     return candidate2;
 }
 
-MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t memoryTypeIndex) {
+MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex) {
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Requested allocation of size %d, type %d.\n", (int)size, (int)memoryTypeIndex);
 #endif
@@ -78,12 +80,12 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
         std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
         lookup = newChonki;
         selectedChonkus = newChonkus;
-        cEntry = this->findAvailableEntry(selectedChonkus, size);
+        cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
     } else {
         std::vector<MemoryChonkus*>& allChonki = chonki[memoryTypeIndex];
         for (int32_t i = allChonki.size() - 1; i >= 0; i--) {
             selectedChonkus = allChonki[i];
-            cEntry = this->findAvailableEntry(selectedChonkus, size);
+            cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
             if (cEntry != nullptr) {
                 break;
             }
@@ -100,12 +102,18 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
 #ifdef DEBUG_MEMORY_MANAGER
             printf("chonkus %p\n", selectedChonkus);
 #endif
-            cEntry = this->findAvailableEntry(selectedChonkus, size);
+            cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
         }
     }
     if (cEntry == nullptr || cEntry->size < size) {
         throw std::runtime_error("Failed to allocate any chonklet entries whatsoever.");
     }
+    // Now we just have a cEntry which *should* have sufficient size
+    // Correct size for alignment:
+    VkDeviceSize alignmentPadding = alignment - (cEntry->offset % alignment);
+    if (alignmentPadding == alignment) alignmentPadding = 0;
+    size += alignmentPadding;
+    // Proceed with chonklet allocation
     VkDeviceSize remainder = cEntry->size - size;
     if (remainder > 0) {
         VkDeviceSize offset = cEntry->offset + size;
@@ -128,6 +136,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, uint32_t m
     ret.chonkus = selectedChonkus;
     ret.offset = cEntry->offset;
     ret.size = cEntry->size;
+    ret.alignmentPadding = alignmentPadding;
     this->deleteEntry(selectedChonkus, cEntry);
 #ifdef DEBUG_MEMORY_MANAGER
     printf("After deletion: ");
@@ -176,7 +185,7 @@ void VulkanAllocationManager::deleteEntry(MemoryChonkus* chonkus, MemoryChonklet
     delete entry;
 }
 
-MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size) {
+MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size, VkDeviceSize alignment) {
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Finding an entry on chonkus %p.\nFreeList: ", chonkus);
     printFreeList(chonkus);
@@ -185,7 +194,9 @@ MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* 
     if (chonkus->entry == nullptr) return nullptr;
     MemoryChonkletEntry* current = chonkus->entry;
     while (true) {
-        if (current->size >= size) {
+        VkDeviceSize rsize = alignment - (current->offset % alignment);
+        if (rsize == alignment) rsize = 0;
+        if (current->size >= (rsize + size)) {
 #ifdef DEBUG_MEMORY_MANAGER
             printf("Got entry offs:%d, size:%d\n", (int)current->offset, (int)current->size);
 #endif
@@ -193,15 +204,12 @@ MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* 
         }
         if (current->next == nullptr) {
 #ifdef DEBUG_MEMORY_MANAGER
-            printf("No entry found, case1!\n");
+            printf("No entry found!\n");
 #endif
             return nullptr;
         }
         current = current->next;
     }
-#ifdef DEBUG_MEMORY_MANAGER
-    printf("No entry found, case2!\n");
-#endif
     return nullptr;
 }
 

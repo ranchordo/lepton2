@@ -8,12 +8,8 @@ void VulkanImage::findMemory(VulkanContext* ctx, VkMemoryPropertyFlags propertie
     VkMemoryRequirements req;
     vkGetImageMemoryRequirements(ctx->device, this->image, &req);
     uint32_t memoryTypeIndex = findMemoryType(ctx, req.memoryTypeBits, properties);
-    this->chonklet = ctx->allocManager.findMemory(req.size + req.alignment, memoryTypeIndex);
-    VkDeviceSize offset = this->chonklet.offset;
-    if (req.alignment != 0) {
-        // *Evil precision magic intensifies* //
-        offset = ((offset + req.alignment - 1) / req.alignment) * req.alignment;
-    }
+    this->chonklet = ctx->allocManager.findMemory(req.size, req.alignment, memoryTypeIndex);
+    VkDeviceSize offset = chonklet.offset + chonklet.alignmentPadding;
     vkBindImageMemory(ctx->device, this->image, this->chonklet.chonkus->memory, offset);
 }
 
@@ -35,12 +31,8 @@ void VulkanBuffer::findMemory(VulkanContext* ctx, VkMemoryPropertyFlags properti
     VkMemoryRequirements req;
     vkGetBufferMemoryRequirements(ctx->device, this->buffer, &req);
     uint32_t memoryTypeIndex = findMemoryType(ctx, req.memoryTypeBits, properties);
-    this->chonklet = ctx->allocManager.findMemory(req.size + req.alignment, memoryTypeIndex);
-    VkDeviceSize offset = this->chonklet.offset;
-    if (req.alignment != 0) {
-        // *Evil precision magic intensifies* //
-        offset = ((offset + req.alignment - 1) / req.alignment) * req.alignment;
-    }
+    this->chonklet = ctx->allocManager.findMemory(req.size, req.alignment, memoryTypeIndex);
+    VkDeviceSize offset = chonklet.offset + chonklet.alignmentPadding;
     vkBindBufferMemory(ctx->device, this->buffer, this->chonklet.chonkus->memory, offset);
 }
 

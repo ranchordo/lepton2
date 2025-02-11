@@ -49,16 +49,16 @@ HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
     std::vector<tinyobj::material_t> materials;
     std::string err;
     std::vector<uint32_t> indices;
-    std::vector<SimplePresetVertex> vertices;
+    std::vector<ObjLoadVertex> vertices;
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename_buffer)) {
         throw std::runtime_error(err);
     }
 
-    std::unordered_map<SimplePresetVertex, uint32_t> unique{};
+    std::unordered_map<ObjLoadVertex, uint32_t> unique{};
 
     for (const tinyobj::shape_t& shape : shapes) {
         for (const tinyobj::index_t& index : shape.mesh.indices) {
-            SimplePresetVertex vertex{};
+            ObjLoadVertex vertex{};
             vertex.pos = {
                 attrib.vertices[3 * index.vertex_index + 0],
                 attrib.vertices[3 * index.vertex_index + 1],
@@ -68,6 +68,11 @@ HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
                 attrib.texcoords[2 * index.texcoord_index + 0],
                 1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
             };
+            vertex.normal = {
+                attrib.normals[3 * index.normal_index + 0],
+                attrib.normals[3 * index.normal_index + 1],
+                attrib.normals[3 * index.normal_index + 2]
+            };
             if (unique.count(vertex) == 0) {
                 unique[vertex] = (uint32_t)(vertices.size());
                 vertices.push_back(vertex);
@@ -76,7 +81,7 @@ HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
         }
     }
 
-    HostObjectData* ret = new HostObjectData(vertices.data(), vertices.size() * sizeof(SimplePresetVertex), indices);
+    HostObjectData* ret = new HostObjectData(vertices.data(), vertices.size() * sizeof(ObjLoadVertex), indices);
     return ret;
 }
 

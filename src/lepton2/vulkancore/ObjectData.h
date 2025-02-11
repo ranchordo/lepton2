@@ -14,10 +14,14 @@ struct VertexStructDescriptor {
 };
 
 struct HostObjectData : public DeletableVulkanResource {
-    // Generates a copy of vertex data, _vsize is total buffer size
-    HostObjectData(void* _vertices, size_t _vsize, std::vector<uint32_t> _indices) {
-        this->vertices = malloc(_vsize);
-        memcpy(this->vertices, _vertices, _vsize);
+    // Will delete internal vertex buffer ptr on destruction.
+    HostObjectData(void* _vertices, size_t _vsize, std::vector<uint32_t> _indices, bool gen_copy = true) {
+        if (gen_copy) {
+            this->vertices = malloc(_vsize);
+            memcpy(this->vertices, _vertices, _vsize);
+        } else {
+            this->vertices = _vertices;
+        }
         this->vsize = _vsize;
         this->indices = _indices;
     }

@@ -22,33 +22,43 @@ using namespace lepton2::graphics::graphicalpresets;
 
 VulkanContext* ctx;
 
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 color;
+struct SpinorVertex {
+    glm::vec4 pos;
     glm::vec2 texcoord;
+    glm::vec4 normal;
 };
 
-VertexStructDescriptor vsd = {{{offsetof(Vertex, pos), VK_FORMAT_R32G32B32_SFLOAT},
-                               {offsetof(Vertex, color), VK_FORMAT_R32G32B32_SFLOAT},
-                               {offsetof(Vertex, texcoord), VK_FORMAT_R32G32_SFLOAT}},
-                              sizeof(Vertex)};
-
-std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
-    {{+0.5f, +0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, +0.5f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
+VertexStructDescriptor spinorvsd = {{{offsetof(SpinorVertex, pos), VK_FORMAT_R32G32B32A32_SFLOAT},
+                                     {offsetof(SpinorVertex, texcoord), VK_FORMAT_R32G32_SFLOAT},
+                                     {offsetof(SpinorVertex, normal), VK_FORMAT_R32G32B32A32_SFLOAT}},
+                                    sizeof(SpinorVertex)};
 
 struct ModelUniformBufferObject {
-    glm::mat4 model;
+    glm::quat model_rot;
+    glm::vec3 model_trans;
 };
 
 struct SubpassUniformBufferObject {
-    glm::mat4 view;
     glm::mat4 proj;
+    glm::mat4 view_post;
+    glm::quat view_rot;
+    glm::vec3 view_trans;
+    float phase_thresh;
 };
+
+glm::vec2 zmult(glm::vec2 a, glm::vec2 b) {
+    return glm::vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+glm::vec4 to_spinor(glm::vec3 vec3, float phase) {
+    float phi = atan2f(vec3.y, vec3.x);
+    float xymag = sqrtf(vec3.x * vec3.x + vec3.y * vec3.y);
+    float theta = atan2f(xymag, vec3.z);
+    glm::vec2 xi1 = glm::vec2(cosf(theta / 2), 0);
+    glm::vec2 xi2 = sinf(theta / 2) * glm::vec2(cosf(phi), sinf(phi));
+    glm::vec2 phasor = glm::vec2(cosf(phase), sinf(phase));
+    return glm::length(vec3) * glm::vec4(zmult(phasor, xi1), zmult(phasor, xi2));
+}
 
 int main(int argc, char** argv) {
 #ifdef DEBUG_ENV
@@ -60,7 +70,7 @@ int main(int argc, char** argv) {
     }
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Lepton2 test", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1600, 1200, "Lepton2 test", nullptr, nullptr);
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Lepton2 test";
@@ -106,15 +116,38 @@ int main(int argc, char** argv) {
 
     SamplerInfo defaultSamplerInfo = {};
     Texture* texture = new Texture(ctx, defaultSamplerInfo);
-    texture->addTextureComponent(ctx, "texture.png");
+    texture->addTextureComponent(ctx, "sphere-test.png");
     sceneContainer.addLinkedResource(texture, true);
 
-    HostObjectData* model = loadObjFile(ctx, "viking_room.obj");
+    HostObjectData* objmodel = loadObjFile(ctx, "sphere-test.obj");
+    ObjLoadVertex* vertices = (ObjLoadVertex*)objmodel->vertices;
+    uint32_t num_vertices = objmodel->vsize / sizeof(ObjLoadVertex);
+
+    SpinorVertex* sverts = (SpinorVertex*)malloc(num_vertices * sizeof(SpinorVertex));
+
+    for (uint32_t i = 0; i < num_vertices; i++) {
+        ObjLoadVertex vert = vertices[i];
+        SpinorVertex svert{};
+        float phase = -atan2(vert.pos.y, vert.pos.x);
+        svert.pos = to_spinor(vert.pos, phase);
+        svert.normal = to_spinor(vert.normal, 0.0);
+        svert.texcoord = vert.texcoord;
+        sverts[i] = svert;
+    }
+
+    HostObjectData* model = new HostObjectData(sverts, num_vertices * sizeof(SpinorVertex), objmodel->indices, false);
+    objmodel->destroy(ctx);
+    delete objmodel;
+
     DeviceObjectData* objectData = new DeviceObjectData(ctx, model);
-    model->destroy(ctx);
+    model->destroy(ctx);  // Deletes sverts pointer
+    sverts = nullptr;
     delete model;
 
-    GenericSinglyTextured entity(ctx, "shader", objectData, texture);
+    ModelUniformBufferObject model_ubo;
+
+    GenericSinglyTextured entity(ctx, "shader", objectData, texture, spinorvsd);
+    entity.set_ubo(&model_ubo, sizeof(ModelUniformBufferObject));
     entity.addLinkedResource(objectData, true);
 
     DescriptorSetLayoutInfo subpassDSLI;
@@ -128,19 +161,17 @@ int main(int argc, char** argv) {
     }
     node->setupSubpassDescriptorSet(ctx, subpassDSLI);
 
-    HostObjectData* hostData = new HostObjectData(vertices.data(), vertices.size() * sizeof(Vertex), indices);
-    sceneContainer.addLinkedResource(hostData, true);
-    DeviceObjectData* devData = new DeviceObjectData(ctx, hostData);
-    sceneContainer.addLinkedResource(devData, true);
     entity.initialize(store, node, renderState);
     sceneContainer.addLinkedResource(&entity, false);
 
-    // graphicalpresets::StaticScreenEntity screenEntity(ctx, "prshader", &node1->getColorAttachments()->at(0));
-    // screenEntity.initialize(node, renderState);
-    // sceneContainer.addLinkedResource(&screenEntity, false);
+    model_ubo.model_trans = glm::vec3(0.0f);
+    model_ubo.model_rot = glm::quat(1.0f, 0, 0, 0);//glm::rotate(glm::quat(1.0f, 0, 0, 0), glm::radians(90.0f), glm::vec3(1, 0, 0));
 
     SubpassUniformBufferObject subo{};
-    subo.view = glm::lookAt(glm::vec3(1, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
+    subo.view_trans = -glm::vec3(1, 0, 0);
+    subo.view_rot = glm::quat(1, 0, 0, 0);
+    subo.view_post = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    subo.phase_thresh = 0;
     subo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
     subo.proj[1][1] *= -1;
 
@@ -169,33 +200,43 @@ int main(int argc, char** argv) {
 
     InputHandler input(ctx->window);
 
+    glm::vec3 ppos = glm::vec3(0, 0, 0.01f);
+    double phi = 0.0;
+    double theta = 0.0;
+
     glfwSetInputMode(ctx->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    glfwPollEvents();
+    MousePosition mpos = input.getMousePosition();
 
     mainLoop.initialize();
     uint32_t frame_count = 0;
+
     while (!mainLoop.shouldLoopTerminate()) {
         auto time_point = startTiming();
         mainLoop.process();
         double fp = getElapsedSeconds(time_point);
         {  // Movement
-            if (input.keyPressed(GLFW_KEY_W)) {
-                subo.view = glm::translate(subo.view, glm::vec3(fp, 0, 0));
-            }
-            if (input.keyPressed(GLFW_KEY_S)) {
-                subo.view = glm::translate(subo.view, glm::vec3(-fp, 0, 0));
-            }
-            if (input.keyPressed(GLFW_KEY_A)) {
-                subo.view = glm::translate(subo.view, glm::vec3(0, fp, 0));
-            }
-            if (input.keyPressed(GLFW_KEY_D)) {
-                subo.view = glm::translate(subo.view, glm::vec3(0, -fp, 0));
-            }
-            if (input.keyPressed(GLFW_KEY_SPACE)) {
-                subo.view = glm::translate(subo.view, glm::vec3(0, 0, -fp));
-            }
-            if (input.keyPressed(GLFW_KEY_LEFT_SHIFT)) {
-                subo.view = glm::translate(subo.view, glm::vec3(0, 0, fp));
-            }
+            MousePosition mpos2 = input.getMousePosition();
+            subo.view_rot = glm::rotate(glm::rotate(glm::quat(1, 0, 0, 0), (float)(-theta), glm::vec3(1, 0, 0)), (float)(-phi), glm::vec3(0, 0, 1));
+            subo.view_trans = -ppos;
+            subo.phase_thresh = -(phi + M_PI) / 2;
+            theta += (mpos.y - mpos2.y) * 0.005;
+            phi += (mpos.x - mpos2.x) * 0.005;
+            if (theta > M_PI_2) theta = M_PI_2;
+            if (theta < -M_PI_2) theta = -M_PI_2;
+            mpos = mpos2;
+            glm::mat3 movframe = glm::rotate(glm::mat4(1.0f), (float)(phi), glm::vec3(0, 0, 1));
+            float movspeed = 1.5 * fp * (1.0 + 1.2 * input.keyPressed(GLFW_KEY_LEFT_CONTROL));
+            glm::vec3 up = movframe * glm::vec3(0, 0, movspeed);
+            glm::vec3 forward = movframe * glm::vec3(0, movspeed, 0);
+            glm::vec3 right = movframe * glm::vec3(movspeed, 0, 0);
+            if (input.keyPressed(GLFW_KEY_W)) ppos += forward;
+            if (input.keyPressed(GLFW_KEY_S)) ppos -= forward;
+            if (input.keyPressed(GLFW_KEY_A)) ppos -= right;
+            if (input.keyPressed(GLFW_KEY_D)) ppos += right;
+            if (input.keyPressed(GLFW_KEY_SPACE)) ppos += up;
+            if (input.keyPressed(GLFW_KEY_LEFT_SHIFT)) ppos -= up;
         }
         if (frame_count % 1000 == 0) {
             printf("Interval (μs): %lf\n", fp * 1000000);
