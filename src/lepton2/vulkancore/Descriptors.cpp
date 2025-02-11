@@ -114,6 +114,9 @@ DescriptorWriteInfoContainer InputAttachmentDescriptor::getWriteInfo(VulkanConte
     }
     DescriptorWriteInfoContainer ret;
     ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    if (this->colorAttachmentInfo->swapChainCreations.size() <= this->arrayIndex) {
+        throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting render target. Is colorAttachmentInfo correct?");
+    }
     ret.imageInfo.imageView = this->colorAttachmentInfo->swapChainCreations[this->arrayIndex]->imageView;
 
     ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
