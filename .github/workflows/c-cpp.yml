@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install dependencies
-      run: sudo apt install vulkan-tools libvulkan-dev vulkan-validationlayers-dev spirv-tools libglfw3-dev libglm-dev
+      run: sudo apt install vulkan-tools libvulkan-dev vulkan-utility-libraries-dev spirv-tools libglfw3-dev libglm-dev
     - name: Install Clang++-17
       run: wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh && chmod u+x /tmp/llvm.sh && sudo /tmp/llvm.sh 17 && rm /tmp/llvm.sh
     - name: Use update alternatives to provide clang++-17
