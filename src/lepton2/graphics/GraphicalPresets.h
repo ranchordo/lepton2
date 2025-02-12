@@ -37,11 +37,12 @@ class StaticScreenEntity : public GraphicalEntity {
     const char* shaderName;
 };
 
-class GenericSinglyTextured : public GraphicalEntity {
+class GenericEntity : public GraphicalEntity {
    public:
-    GenericSinglyTextured(vkc::VulkanContext* ctx, const char* shaderName, vkc::DeviceObjectData* objectData, vkc::Texture* texture, vkc::VertexStructDescriptor vsd = objLoadVsd);
+    GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, vkc::DeviceObjectData* objectData, vkc::VertexStructDescriptor vsd = objLoadVsd);
     vkc::PipelineConstraints getPipelineRequirements() override;
     void preRender(vkc::RenderState* renderState, vkc::SingleDescriptorSet* sds, uint32_t scfi) override;
+    void setTexture(vkc::Texture* texture) { this->texture = texture; }
     virtual void logic() {};
 
     void set_ubo(void* _ubo, size_t _ubo_size) {
@@ -57,7 +58,7 @@ class GenericSinglyTextured : public GraphicalEntity {
 
    private:
     const char* shaderName;
-    vkc::Texture* texture;
+    vkc::Texture* texture = nullptr;
     vkc::VertexStructDescriptor vsd;
     void* ubo = &this->base_ubo;
     size_t ubo_size = sizeof(base_ubo);

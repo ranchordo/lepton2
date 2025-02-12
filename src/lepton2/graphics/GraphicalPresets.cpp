@@ -44,14 +44,13 @@ StaticScreenEntity::StaticScreenEntity(VulkanContext* ctx, const char* shaderNam
     this->setObjectData(objectData);
 }
 
-GenericSinglyTextured::GenericSinglyTextured(vkc::VulkanContext* ctx, const char* shaderName, DeviceObjectData* objectData, Texture* texture, vkc::VertexStructDescriptor vsd) {
+GenericEntity::GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, DeviceObjectData* objectData, vkc::VertexStructDescriptor vsd) {
     if (objectData != nullptr) this->setObjectData(objectData);
     this->shaderName = shaderName;
-    this->texture = texture;
     this->vsd = vsd;
 }
 
-PipelineConstraints GenericSinglyTextured::getPipelineRequirements() {
+PipelineConstraints GenericEntity::getPipelineRequirements() {
     DescriptorSetLayoutInfo dsli;
     {
         DescriptorInfo descInfo;
@@ -61,19 +60,21 @@ PipelineConstraints GenericSinglyTextured::getPipelineRequirements() {
         descInfo.shaderStages = VK_SHADER_STAGE_VERTEX_BIT;
         dsli.addNewBinding(descInfo);
     }
-    for (uint32_t i = 0; i < this->texture->components.size(); i++) {
-        DescriptorInfo descInfo;
-        descInfo.imageSamplerData.container = this->texture;
-        descInfo.imageSamplerData.componentIndex = i;
-        descInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
-        dsli.addNewBinding(descInfo);
+    if (this->texture != nullptr) {
+        for (uint32_t i = 0; i < this->texture->components.size(); i++) {
+            DescriptorInfo descInfo;
+            descInfo.imageSamplerData.container = this->texture;
+            descInfo.imageSamplerData.componentIndex = i;
+            descInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
+            dsli.addNewBinding(descInfo);
+        }
     }
     PipelineConstraints ret(this->shaderName, dsli, this->vsd);
     return ret;
 }
 
-void GenericSinglyTextured::preRender(RenderState* renderState, SingleDescriptorSet* sds, uint32_t scfi) {
+void GenericEntity::preRender(RenderState* renderState, SingleDescriptorSet* sds, uint32_t scfi) {
     VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(sds->instances[0]))->uniformBuffer;
     void* data = uniformBuffer->chonklet.mapMemory(renderState->ctx, 0);
     memcpy(data, ubo, ubo_size);
