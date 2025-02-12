@@ -5,7 +5,7 @@
 BASECFLAGS = -std=c++17 -O3
 BASELDFLAGS = -lglfw -lvulkan
 
-SOURCES = $(wildcard */*.cpp) $(wildcard */*/*.cpp) $(wildcard */*/*/*.cpp)
+SOURCES = $(wildcard src/*.cpp) $(wildcard src/*/*.cpp) $(wildcard src/*/*/*.cpp)
 OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
 
 SHADER_SOURCES = $(wildcard shaders_src/*.frag) $(wildcard shaders_src/*.vert) $(wildcard shaders_src/*/*.frag) $(wildcard shaders_src/*/*.vert)
