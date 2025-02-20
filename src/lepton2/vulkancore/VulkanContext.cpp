@@ -308,6 +308,21 @@ void VulkanContext::setRelativePaths(const char* argv0) {
     strcpy(this->assets_load_path, asset_location);
 }
 
+char* VulkanContext::buildShaderLoadPaths(const char* rel) {
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s.____.spv", this->shaders_spirv_load_path, rel);
+    char* buf = (char*)malloc(sizeof(char) * 2 * (combined_length + 1));
+    snprintf(buf, combined_length + 1, "%s/%s.vert.spv", this->shaders_spirv_load_path, rel);
+    snprintf(buf + combined_length + 1, combined_length + 1, "%s/%s.frag.spv", this->shaders_spirv_load_path, rel);
+    return buf;
+}
+
+char* VulkanContext::buildAssetLoadPath(const char* rel) {
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s", this->assets_load_path, rel);
+    char* buf = (char*)malloc(sizeof(char) * (combined_length + 1));
+    snprintf(buf, combined_length + 1, "%s/%s", this->assets_load_path, rel);
+    return buf;
+}
+
 void VulkanContext::destroy_back(VulkanContext* ctx) {
     this->swapChain.destroy(ctx);
     this->descriptorPoolManager.destroy(ctx);

@@ -63,13 +63,17 @@ class VulkanContext : public DeletableVulkanResource {
     DescriptorPoolManager descriptorPoolManager;
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-    char* shaders_spirv_load_path;
-    char* assets_load_path;
     void destroy_back(VulkanContext* ctx) override;
+
+    char* buildShaderLoadPaths(const char* rel);
+    char* buildAssetLoadPath(const char* rel);
 
    private:
     bool enable_validation_layers;
     bool print_debug_info;
+
+    char* shaders_spirv_load_path;
+    char* assets_load_path;
 
     VkDebugUtilsMessengerEXT debugMessenger;
     void createInstance(VkApplicationInfo appInfo);

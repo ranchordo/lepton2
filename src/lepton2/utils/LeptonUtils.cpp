@@ -2,6 +2,7 @@
 
 #include "../external/tiny_obj_loader.h"
 #include "../graphics/GraphicalPresets.h"
+#include "../vulkancore/VulkanContext.h"
 
 using namespace lepton2::vulkancore;
 using namespace lepton2::graphics::graphicalpresets;
@@ -41,18 +42,17 @@ std::vector<char> readFile(const std::string& filename) {
 }
 
 HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s", ctx->assets_load_path, filename);
-    char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s", ctx->assets_load_path, filename);
+    char* buf = ctx->buildAssetLoadPath(filename);
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string err;
     std::vector<uint32_t> indices;
     std::vector<ObjLoadVertex> vertices;
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename_buffer)) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, buf)) {
         throw std::runtime_error(err);
     }
+    free(buf);
 
     std::unordered_map<ObjLoadVertex, uint32_t> unique{};
 

@@ -9,11 +9,10 @@ TextureComponent::TextureComponent(VulkanContext* ctx, void* imageData, uint32_t
 }
 
 TextureComponent::TextureComponent(VulkanContext* ctx, const char* filename) {
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s", ctx->assets_load_path, filename);
-    char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s", ctx->assets_load_path, filename);
+    char* buf = ctx->buildAssetLoadPath(filename);
     int width, height, channels;
-    stbi_uc* imageData = stbi_load(filename_buffer, &width, &height, &channels, STBI_rgb_alpha);
+    stbi_uc* imageData = stbi_load(buf, &width, &height, &channels, STBI_rgb_alpha);
+    free(buf);
     if (!imageData) {
         throw std::runtime_error("Failed to load a texture file.");
     }

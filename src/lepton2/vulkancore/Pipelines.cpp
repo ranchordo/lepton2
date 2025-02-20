@@ -46,14 +46,20 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
 
 GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass,
                                    const PipelineInfo& cInfo) : creationConstraints(cInfo.constraints) {
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
-    char filename_buffer[combined_length + 1];
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.vert.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
-    std::vector<char> vertex_code = lepton2::utils::readFile(std::string(filename_buffer));
-    this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
-    snprintf(filename_buffer, combined_length + 1, "%s/%s.frag.spv", ctx->shaders_spirv_load_path, cInfo.constraints.shaderName);
-    std::vector<char> fragment_code = lepton2::utils::readFile(std::string(filename_buffer));
-    this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
+    char* buf = ctx->buildShaderLoadPaths(cInfo.constraints.shaderName);
+    size_t vcodelen = 0;
+    {
+        std::string vcode = std::string(buf);
+        vcodelen = vcode.length();
+        std::vector<char> vertex_code = lepton2::utils::readFile(vcode);
+        this->vertexShaderModule = this->buildShaderModule(ctx, vertex_code);
+    }
+    {
+        std::string fcode = std::string(buf + vcodelen + 1);
+        std::vector<char> fragment_code = lepton2::utils::readFile(fcode);
+        this->fragmentShaderModule = this->buildShaderModule(ctx, fragment_code);
+    }
+    free(buf);
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
