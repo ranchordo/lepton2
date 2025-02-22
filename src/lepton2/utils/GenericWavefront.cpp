@@ -48,10 +48,10 @@ static uint8_t get_fmt_size(VkFormat format) {
     };
 }
 
-static bool check_vsd_compat(std::vector<const char*> pfx, VertexStructDescriptor& vsd) {
-    if (pfx.size() - 1 != vsd.members.size()) return false;
-    for (uint32_t i = 0; i < pfx.size() - 1; i++) {
-        if (get_pfx_size(pfx[i]) != get_fmt_size(vsd.members[i].second)) return false;
+static bool check_vsd_compat(uint32_t* pfx, uint32_t vsize, VertexStructDescriptor& vsd) {
+    if (vsize != vsd.members.size()) return false;
+    for (uint32_t i = 0; i < vsize; i++) {
+        if (pfx[i] != get_fmt_size(vsd.members[i].second)) return false;
     }
     return true;
 }
@@ -68,10 +68,24 @@ struct VertexReference {
     }
 };
 
+namespace std {
+template <>
+struct hash<VertexReference> {
+    size_t operator()(VertexReference const& vertex) const {
+        size_t prime = 13931;
+        size_t result = 0;
+        for (uint32_t i = 0; i < vertex.size; i++) {
+            result = prime * result + vertex.ptr[i];
+        }
+        return result;
+    }
+};
+}  // namespace std
+
 namespace lepton2::utils {
 
 void parseGenericWavefront(VulkanContext* ctx, const char* loc, std::vector<const char*> pfx,
-                           std::vector<double>* l1, std::vector<uint32_t>* fd) {
+                           uint32_t* pfx_sizes, std::vector<double>* l1, std::vector<uint32_t>* fd) {
     char* buf = ctx->buildAssetLoadPath(loc);
     std::ifstream file;
     file.open(buf);
@@ -84,6 +98,10 @@ void parseGenericWavefront(VulkanContext* ctx, const char* loc, std::vector<cons
 
     if (!file.good()) {
         throw std::runtime_error("Failed to open generic wavefront file for reading");
+    }
+
+    for (uint32_t i = 0; i < pfx.size(); i++) {
+        pfx_sizes[i] = get_pfx_size(pfx[i]);
     }
 
     while (std::getline(file, line)) {
@@ -120,7 +138,7 @@ void parseGenericWavefront(VulkanContext* ctx, const char* loc, std::vector<cons
                     if (!std::getline(vstream, vidx, '/')) {
                         throw std::runtime_error("Parsing generic wavefront failed: vidx array too short");
                     }
-                    fd->push_back(std::stoi(vidx));
+                    fd->push_back(std::stoi(vidx) - 1);
                 }
                 if (std::getline(vstream, vidx, '/')) {
                     throw std::runtime_error("Parsing generic wavefront failed: vidx array too long");
@@ -136,35 +154,43 @@ void parseGenericWavefront(VulkanContext* ctx, const char* loc, std::vector<cons
     file.close();
 }
 
-HostObjectData* buildGenericWavefrontObj(VulkanContext* ctx, std::vector<const char*> pfx, std::vector<double>* l1,
-                                         std::vector<uint32_t>* fd, VertexStructDescriptor& vsd) {
-    if (!check_vsd_compat(pfx, vsd)) {
+HostObjectData* buildGenericWavefrontObj(VulkanContext* ctx, uint32_t* pfx, uint32_t vsize, std::vector<double>* l1,
+                                         std::vector<uint32_t>& fd, VertexStructDescriptor& vsd) {
+    if (pfx[vsize] != 3) {
+        throw std::runtime_error("GenericWavefront: vertices per face *must* be 3 to obtain HostObjectData");
+    }
+    if (!check_vsd_compat(pfx, vsize, vsd)) {
         throw std::runtime_error("GenericWavefront: buildGenericWavefrontObj: pfx/vsd layouts incompatible");
     }
-    uint32_t vsize = pfx.size() - 1;
     std::unordered_map<VertexReference, uint32_t> vertmap;
-    for (uint32_t i = 0; i < fd->size(); i += vsize) {
+    std::vector<uint32_t> indices;
+    for (uint32_t i = 0; i < fd.size(); i += vsize) {
         VertexReference vref{};
-        vref.ptr = fd->data() + i;
+        vref.ptr = fd.data() + i;
         vref.size = vsize;
         if (vertmap.count(vref) == 0) {
             vertmap[vref] = vertmap.size();
         }
+        indices.push_back(vertmap[vref]);
     }
+
+    char* vbuf = (char*)malloc(vertmap.size() * vsd.size);
+    for (std::pair<VertexReference, uint32_t> entry : vertmap) {
+        char* vertptr = vbuf + (vsd.size * entry.second);
+        for (uint32_t p = 0; p < vsize; p++) {
+            uint32_t l1idx = entry.first.ptr[p];
+            float* target = (float*)(vertptr + vsd.members[p].first);
+            double* source = l1[p].data() + (l1idx * pfx[p]);
+            // Can't use memcpy bc of precision conversion
+            for (uint32_t j = 0; j < pfx[p]; j++) {
+                target[j] = (float)(source[j]);
+            }
+        }
+    }
+
+    // No need to free vbuf - lives on inside objdata
+    HostObjectData* objdata = new HostObjectData(vbuf, vertmap.size() * vsd.size, indices, false);
+    return objdata;
 }
 
 }  // namespace lepton2::utils
-
-namespace std {
-template <>
-struct hash<VertexReference> {
-    size_t operator()(VertexReference const& vertex) const {
-        size_t prime = 13931;
-        size_t result = 0;
-        for (uint32_t i = 0; i < vertex.size; i++) {
-            result = prime * result + vertex.ptr[i];
-        }
-        return result;
-    }
-};
-}  // namespace std
