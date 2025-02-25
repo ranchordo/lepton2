@@ -42,7 +42,7 @@ GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfigurati
         dsl.push_back(renderState->getPassDsa()->descriptorSetLayout);
     }
     PipelineInfo newPipelineInfo(dsl, constraints);
-    newConfiguration->pipeline = new GraphicsPipeline(renderState->ctx, parent->getSubpassIndex(), renderState->renderPass, newPipelineInfo);
+    newConfiguration->pipeline = new GraphicsPipeline(renderState->ctx, this->parent, renderState->renderPass, newPipelineInfo);
     return newConfiguration;
 }
 
@@ -111,7 +111,7 @@ void SubpassGraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
     this->cache.clear();
 }
 
-void GraphicalConfigurationStore::addPass(RenderState* pass) {
+void GraphicalConfigurationStore::addAllSubpasses(RenderState* pass) {
     if (this->subpassStores.count(pass) > 0) return;
     std::vector<SubpassGraphicalConfigurationStore*> stores(pass->numSubpasses());
     for (uint32_t i = 0; i < pass->numSubpasses(); i++) {

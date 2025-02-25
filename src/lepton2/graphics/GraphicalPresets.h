@@ -27,13 +27,14 @@ extern vkc::VertexStructDescriptor objLoadVsd;
 
 class StaticScreenEntity : public GraphicalEntity {
    public:
-    StaticScreenEntity(vkc::VulkanContext* ctx, const char* shaderName, vkc::ColorAttachmentInfo* colorAttachmentInfo);
+    StaticScreenEntity(vkc::VulkanContext* ctx, const char* shaderName, std::vector<vkc::ColorAttachmentInfo*> colorAttachmentInfo);
     vkc::PipelineConstraints getPipelineRequirements() override;
+    static std::vector<vkc::ColorAttachmentInfo*> fromNodeOutputs(vkc::RenderGraphNode* node);
 
     void destroy_back(vkc::VulkanContext* ctx) override { this->destroyEntityResources(ctx); }
 
    private:
-    vkc::ColorAttachmentInfo* colorAttachmentInfo;
+    std::vector<vkc::ColorAttachmentInfo*> colorAttachmentInfo;
     const char* shaderName;
 };
 

@@ -15,8 +15,12 @@ struct RenderTargetImageCreationInfo {
     VkImageUsageFlags usage;
     VkMemoryPropertyFlags memoryProperties;
     VkImageAspectFlags aspectFlags;
+    VkPipelineColorBlendAttachmentState blendState;
     std::vector<VulkanImage*>* creationTracker;
 };
+
+// Utility function to decrease verbosity
+RenderTargetImageCreationInfo defaultColorAttachmentRTIC(VkFormat format, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
 
 struct ColorAttachmentInfo {
     VkAttachmentDescription desc;
@@ -109,7 +113,7 @@ class RenderGraph : public DeletableVulkanResource {
    private:
     std::vector<RenderGraphNode*> nodes;
     VulkanContext* ctx;
-    RenderGraphNode* terminator = NULL;
+    RenderGraphNode* terminator = nullptr;
     friend class RenderState;
 };
 }  // namespace lepton2::vulkancore

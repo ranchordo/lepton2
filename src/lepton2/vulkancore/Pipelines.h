@@ -45,7 +45,7 @@ struct PipelineInfo {
 
 class GraphicsPipeline : public DeletableVulkanResource {
    public:
-    GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex,
+    GraphicsPipeline(VulkanContext* ctx, RenderGraphNode* node,
                      VkRenderPass renderPass, const PipelineInfo& cInfo);
     void bind(VkCommandBuffer commandBuffer);
     VkPipeline getPipeline() { return this->pipeline; }

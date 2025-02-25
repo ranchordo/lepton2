@@ -44,7 +44,7 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
     return shaderModule;
 }
 
-GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, VkRenderPass renderPass,
+GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderGraphNode* node, VkRenderPass renderPass,
                                    const PipelineInfo& cInfo) : creationConstraints(cInfo.constraints) {
     char* buf = ctx->buildShaderLoadPaths(cInfo.constraints.shaderName);
     size_t vcodelen = 0;
@@ -123,22 +123,17 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     multisampling.alphaToCoverageEnable = VK_FALSE;
     multisampling.alphaToOneEnable = VK_FALSE;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_TRUE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
+    for (uint32_t i = 0; i < node->getColorAttachments()->size(); i++) {
+        colorBlendAttachments.push_back(node->getColorAttachments()->at(i).rticInfo.blendState);
+    }
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
+    colorBlending.attachmentCount = colorBlendAttachments.size();
+    colorBlending.pAttachments = colorBlendAttachments.data();
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -177,7 +172,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, uint32_t subpassIndex, Vk
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = renderPass;
-    pipelineInfo.subpass = subpassIndex;
+    pipelineInfo.subpass = node->getSubpassIndex();
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 

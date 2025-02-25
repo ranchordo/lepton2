@@ -2,6 +2,30 @@
 
 using namespace lepton2::vulkancore;
 
+namespace lepton2::vulkancore {
+RenderTargetImageCreationInfo defaultColorAttachmentRTIC(VkFormat format, VkSampleCountFlagBits samples) {
+    VkPipelineColorBlendAttachmentState blendState{};
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendState.blendEnable = VK_TRUE;
+    blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blendState.colorBlendOp = VK_BLEND_OP_ADD;
+    blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blendState.alphaBlendOp = VK_BLEND_OP_ADD;
+    RenderTargetImageCreationInfo ret{};
+    ret.use_presenter = false;
+    ret.imageTiling = VK_IMAGE_TILING_OPTIMAL;
+    ret.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    ret.samples = samples;
+    ret.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    ret.format = format;
+    ret.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    ret.blendState = blendState;
+    return ret;
+}
+}  // namespace lepton2::vulkancore
+
 RenderGraphNode::RenderGraphNode() {
     this->isTerminatingNode = false;
 }
@@ -22,8 +46,20 @@ RenderGraphNode::RenderGraphNode(VulkanContext* ctx, bool isTerminatingNode) {
     desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    RenderTargetImageCreationInfo rticInfo;
+    RenderTargetImageCreationInfo rticInfo{};
     rticInfo.use_presenter = true;
+    VkPipelineColorBlendAttachmentState blendState{};
+    // FIXME: Give some option to override these defaults
+    // Maybe a more manual terminating node construction method?
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendState.blendEnable = VK_TRUE;
+    blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blendState.colorBlendOp = VK_BLEND_OP_ADD;
+    blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blendState.alphaBlendOp = VK_BLEND_OP_ADD;
+    rticInfo.blendState = blendState;
     ColorAttachmentInfo info;
     info.desc = desc;
     info.rticInfo = rticInfo;
@@ -166,6 +202,9 @@ RenderGraph::RenderGraph(VulkanContext* ctx) {
 }
 
 RenderGraphNode* RenderGraph::buildPresentingNode() {
+    if (this->terminator != nullptr) {
+        throw std::runtime_error("Cannot replace terminating node");
+    }
     this->terminator = new RenderGraphNode(ctx, true);
     this->nodes.push_back(this->terminator);
     return this->terminator;
@@ -294,6 +333,15 @@ RenderState* RenderGraph::buildRenderState() {
             VkSubpassDependency dependency{};
             dependency.srcSubpass = p.second.second->nodeIndex;
             dependency.dstSubpass = node->nodeIndex;
+            for (VkSubpassDependency dep : subpassDependencies) {
+                if (dep.srcSubpass == dependency.srcSubpass && dep.dstSubpass == dependency.dstSubpass) {
+                    dependency.srcSubpass = UINT32_MAX;
+                    break;
+                }
+            }
+            if (dependency.srcSubpass == UINT32_MAX) {
+                continue; // Filter duplicate dependencies
+            }
             dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;

@@ -58,15 +58,7 @@ int main(int argc, char** argv) {
     RenderGraphNode* node = renderGraph.buildPresentingNode();
 
     RenderGraphNode* node1 = renderGraph.buildNewNode();
-    RenderTargetImageCreationInfo rticInfo{};
-    rticInfo.use_presenter = false;
-    rticInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
-    rticInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    rticInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    rticInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    rticInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    node1->addColorAttachment(rticInfo, true);
+    node1->addColorAttachment(defaultColorAttachmentRTIC(VK_FORMAT_R16G16B16A16_SFLOAT), true);
     node->connectFromNode(node1, 0, 0);
 
     RenderState* renderState = renderGraph.buildRenderState();
@@ -76,7 +68,7 @@ int main(int argc, char** argv) {
     ctx->swapChain.buildSwapChain(renderState);
 
     GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
-    store->addPass(renderState);
+    store->addAllSubpasses(renderState);
     renderState->addLinkedResource(store, true);
 
     VulkanLoop mainLoop(renderState, 2);
@@ -159,7 +151,7 @@ int main(int argc, char** argv) {
     rectangleEntity1.initialize(store, node1, renderState);
     sceneContainer.addLinkedResource(&rectangleEntity1, false);
 
-    StaticScreenEntity screenEntity(ctx, "default/post_process", &node1->getColorAttachments()->at(0));
+    StaticScreenEntity screenEntity(ctx, "default/post_process", {&node1->getColorAttachments()->at(0)});
     screenEntity.initialize(store, node, renderState);
     sceneContainer.addLinkedResource(&screenEntity, false);
 

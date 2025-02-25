@@ -24,18 +24,28 @@ std::vector<SimplePresetVertex> screenVertices = {
 
 std::vector<uint32_t> screenIndices = {1, 0, 3, 1, 3, 2};
 
+std::vector<vkc::ColorAttachmentInfo*> StaticScreenEntity::fromNodeOutputs(vkc::RenderGraphNode* node) {
+    std::vector<vkc::ColorAttachmentInfo*> ret;
+    for (uint32_t i = 0; i < node->getColorAttachments()->size(); i++) {
+        ret.push_back(&node->getColorAttachments()->at(i));
+    }
+    return ret;
+}
+
 PipelineConstraints StaticScreenEntity::getPipelineRequirements() {
-    DescriptorInfo descInfo;
-    descInfo.inputAttachmentData.colorAttachmentInfo = this->colorAttachmentInfo;
-    descInfo.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-    descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
     DescriptorSetLayoutInfo dsli;
-    dsli.addNewBinding(descInfo);
+    for (uint32_t i = 0; i < this->colorAttachmentInfo.size(); i++) {
+        DescriptorInfo descInfo;
+        descInfo.inputAttachmentData.colorAttachmentInfo = this->colorAttachmentInfo[i];
+        descInfo.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+        descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
+        dsli.addNewBinding(descInfo);
+    }
     PipelineConstraints req(this->shaderName, dsli, simplePresetVsd);
     return req;
 }
 
-StaticScreenEntity::StaticScreenEntity(VulkanContext* ctx, const char* shaderName, ColorAttachmentInfo* colorAttachmentInfo) {
+StaticScreenEntity::StaticScreenEntity(VulkanContext* ctx, const char* shaderName, std::vector<ColorAttachmentInfo*> colorAttachmentInfo) {
     this->shaderName = shaderName;
     this->colorAttachmentInfo = colorAttachmentInfo;
     HostObjectData hostData(screenVertices.data(), screenVertices.size() * sizeof(SimplePresetVertex), screenIndices);

@@ -185,15 +185,16 @@ int VulkanContext::calculateDeviceScore(VkPhysicalDevice device) {
     }
     bool isSuitable = true;
     float totalScore = 0.0;
-    do_absolute_criterion("Has necessary queue family support", findQueueFamilies(device).is_complete());
-    do_absolute_criterion("Has necessary extention support", checkDeviceExtensionSupport(device));
+    do_absolute_criterion("Adequate queue family support", findQueueFamilies(device).is_complete());
+    do_absolute_criterion("Adequate extention support", checkDeviceExtensionSupport(device));
     do_absolute_criterion("Adequate swapchain support", this->querySwapChainSupport(device).has_formats_and_present_modes());
     do_absolute_criterion("Sampler anisotropy", deviceFeatures.samplerAnisotropy);
+    do_absolute_criterion("Independent blending support", deviceFeatures.independentBlend);
     if (isSuitable) {
         do_score_criterion("Is discrete GPU", 10000, int(deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU));
         do_score_criterion("Image dimension limits", 0.03125, (deviceProperties.limits.maxImageDimension2D));
     } else if (this->print_debug_info) {
-        printf(" --> Device is not suitable. Not checking score criteria...\n");
+        printf(" --> Device is not suitable. Not checking score criteria.\n");
     }
     if (this->print_debug_info) {
         printf(" --> Total device score: %d.\n\n", int(totalScore * int(isSuitable)));
@@ -249,6 +250,7 @@ void VulkanContext::createLogicalDevice() {
     VkPhysicalDeviceFeatures deviceFeatures{};
     deviceFeatures.samplerAnisotropy = VK_TRUE;
     deviceFeatures.fillModeNonSolid = VK_TRUE;
+    deviceFeatures.independentBlend = VK_TRUE;
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.pQueueCreateInfos = queueCreateInfos.data();

@@ -58,7 +58,7 @@ class SubpassGraphicalConfigurationStore : public vkc::DeletableVulkanResource {
 class GraphicalConfigurationStore : public vkc::DeletableVulkanResource {
    public:
     std::unordered_map<vkc::RenderState*, std::vector<SubpassGraphicalConfigurationStore*>> subpassStores;
-    void addPass(vkc::RenderState* pass);
+    void addAllSubpasses(vkc::RenderState* pass);
     void destroy_back(vkc::VulkanContext* ctx) override {}
 };
 

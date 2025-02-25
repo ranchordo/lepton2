@@ -34,9 +34,9 @@ UniformBufferDescriptor::UniformBufferDescriptor(VulkanContext* ctx, DescriptorI
 
 DescriptorWriteInfoContainer UniformBufferDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
     DescriptorWriteInfoContainer ret{};
-    ret.bufferInfo.buffer = uniformBuffer->buffer;
+    ret.bufferInfo.buffer = uniformBuffer != nullptr ? uniformBuffer->buffer : nullptr;
     ret.bufferInfo.offset = 0;
-    ret.bufferInfo.range = this->uniformBufferSize;
+    ret.bufferInfo.range = uniformBuffer != nullptr ? this->uniformBufferSize : 0;
 
     ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     ret.writeInfo.dstSet = dstSet;
@@ -50,7 +50,7 @@ DescriptorWriteInfoContainer UniformBufferDescriptor::getWriteInfo(VulkanContext
 }
 
 void UniformBufferDescriptor::destroy_back(VulkanContext* ctx) {
-    this->uniformBuffer->destroy(ctx);
+    if (this->uniformBuffer != nullptr) this->uniformBuffer->destroy(ctx);
     delete this->uniformBuffer;
 }
 
