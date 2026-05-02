@@ -1,9 +1,11 @@
-.PHONY: test clean all_shaders build_mac build_linux
+.PHONY: test clean all_shaders build_mac build_linux build_win
 
 # Base build procedure #
 
 BASECFLAGS = -std=c++17 -O3
 BASELDFLAGS = -lglfw -lvulkan
+
+BASE_OUTPUT ?= lepton2_main
 
 SOURCES = $(wildcard src/*.cpp) $(wildcard src/*/*.cpp) $(wildcard src/*/*/*.cpp)
 OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
@@ -43,11 +45,15 @@ clean_aux:
 	mv rmtemp/o/lepton2/* build/o/lepton2/
 	rm -rf rmtemp
 
+clean_resources:
+	rm -rf build/output/assets
+	rm -rf build/output/shaders
+
 # Test native build #
 
 test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV
 test: LDFLAGS = $(BASELDFLAGS)
-test: OUTPUT = build/output/lepton2_main
+test: OUTPUT = build/output/$(BASE_OUTPUT)
 test: build-base assets
 	@echo Launching $(OUTPUT)...
 	@./$(OUTPUT)
@@ -61,7 +67,7 @@ build_mac_extract_sysroot:
 
 build_mac: CFLAGS = $(BASECFLAGS) -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
 build_mac: LDFLAGS = $(BASELDFLAGS) -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
-build_mac: OUTPUT = build/output/lepton2_main
+build_mac: OUTPUT = build/output/$(BASE_OUTPUT)
 build_mac: clean build_mac_extract_sysroot build-base assets
 	mkdir -p build/output/vulkan/icd.d
 	cp build-resources/MoltenVK_icd.json build/output/vulkan/icd.d/
@@ -73,6 +79,23 @@ build_mac: clean build_mac_extract_sysroot build-base assets
 
 build_linux: CFLAGS = $(BASECFLAGS)
 build_linux: LDFLAGS = $(BASELDFLAGS)
-build_linux: OUTPUT = build/output/lepton2_main
+build_linux: OUTPUT = build/output/$(BASE_OUTPUT)
 build_linux: clean build-base assets
+	@echo "Build completed in build/output/."
+
+# Windows build #
+
+WIN_TARGET = x86_64-w64-mingw32
+WIN_SYSROOT = /usr/$(WIN_TARGET)
+WIN_GCCDIR_ROOT = /usr/lib/gcc/$(WIN_TARGET)
+WIN_GCCDIR = $(WIN_GCCDIR_ROOT)/$(shell ls $(WIN_GCCDIR_ROOT) | grep win | head -n 1)
+
+build_win_extract_sysroot:
+	mkdir -p build
+	tar -xf build-resources/win_vulkan_sdk.tar.gz -C build/
+
+build_win: CFLAGS = $(BASECFLAGS) -target $(WIN_TARGET) -Ibuild/win_vulkan_sdk/Include -I$(WIN_GCCDIR)/include/c++ -I$(WIN_GCCDIR)/include/c++/$(WIN_TARGET) --sysroot=$(WIN_SYSROOT)
+build_win: LDFLAGS = -Lbuild/win_vulkan_sdk/Lib -L$(WIN_GCCDIR) -lvulkan-1 -lglfw3 -lgdi32 -lkernel32 -luser32 -lshell32 -static -static-libgcc -static-libstdc++
+build_win: OUTPUT = build/output/$(BASE_OUTPUT).exe
+build_win: clean build_win_extract_sysroot build-base assets
 	@echo "Build completed in build/output/."

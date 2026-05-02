@@ -22,6 +22,13 @@ class GenericWavefrontData {
     std::vector<double> l1_data[num_l1_prefix];
     std::vector<uint32_t> face_data;
     uint32_t pfx_sizes[num_l1_prefix + 1];
+
+    void scale_l1_data(uint32_t prefix_idx, double amt) {
+        for (uint32_t i = 0; i < l1_data[prefix_idx].size(); i++) {
+            l1_data[prefix_idx][i] *= amt;
+        }
+    }
+
     GenericWavefrontData(vkc::VulkanContext* ctx, const char* loc, std::vector<const char*> pfx) {
         if (pfx.size() - 1 != num_l1_prefix) {
             throw std::runtime_error("Incorrect number of l1 prefixes used for parsing generic wavefront");

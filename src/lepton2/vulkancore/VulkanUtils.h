@@ -8,6 +8,8 @@
 #define DEBUG_ENV
 #endif
 
+#define _USE_MATH_DEFINES
+
 #if defined(__APPLE__)
 #include <MoltenVK/mvk_vulkan.h>
 #endif

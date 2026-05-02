@@ -5,6 +5,8 @@
 #include "VulkanMemory.h"
 #include "VulkanUtils.h"
 
+#include <optional>
+
 namespace lepton2::vulkancore {
 
 struct QueueFamilyIndices {

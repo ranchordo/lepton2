@@ -300,14 +300,14 @@ void VulkanContext::buildAllCommandPools() {
 
 void VulkanContext::setRelativePaths(const char* argv0) {
     std::filesystem::path shader_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("shaders");
-    const char* shader_location = shader_location_path.c_str();
-    this->shaders_spirv_load_path = (char*)malloc(strlen(shader_location) + 1);
-    strcpy(this->shaders_spirv_load_path, shader_location);
+    std::string shader_location = shader_location_path.string();
+    this->shaders_spirv_load_path = (char*)malloc(shader_location.length() + 1);
+    strcpy(this->shaders_spirv_load_path, shader_location.c_str());
 
     std::filesystem::path asset_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("assets");
-    const char* asset_location = asset_location_path.c_str();
-    this->assets_load_path = (char*)malloc(strlen(asset_location) + 1);
-    strcpy(this->assets_load_path, asset_location);
+    std::string asset_location = asset_location_path.string();
+    this->assets_load_path = (char*)malloc(asset_location.length() + 1);
+    strcpy(this->assets_load_path, asset_location.c_str());
 }
 
 char* VulkanContext::buildShaderLoadPaths(const char* rel) {
