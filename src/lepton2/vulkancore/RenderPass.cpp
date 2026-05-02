@@ -1,4 +1,4 @@
-#include "RenderState.h"
+#include "RenderPass.h"
 
 using namespace lepton2::vulkancore;
 
@@ -104,25 +104,27 @@ void RenderGraphNode::requestDepthAsInput(uint32_t index) {
     this->depthInputRequest = index;
 }
 
-void RenderGraphNode::setupSubpassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli) {
-    this->removeSubpassDescriptorSet(ctx);
+void RenderGraphNode::setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, DescriptorSetLayoutInfo dsli) {
+    if (this->subpassDsa != nullptr) {
+        throw std::runtime_error("Subpass DSA may only be set up once.");
+    }
     this->subpassDsa = new DescriptorSetArray(dsli);
     this->addLinkedResource(subpassDsa, true);
     this->subpassDsa->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->subpassDsa, ctx->swapChain.swapChainImages.size());
-}
 
-void RenderGraphNode::removeSubpassDescriptorSet(VulkanContext* ctx) {
-    if (this->subpassDsa != nullptr) {
-        this->removeLinkedResource(this->subpassDsa);
-        this->subpassDsa->destroy(ctx);
-        delete this->subpassDsa;
-        this->subpassDsa = nullptr;
+    std::vector<VkDescriptorSetLayout> dsls(parent->getSuperpassLayouts());
+    if (parent->getPassDsa() != nullptr) {
+        dsls.push_back(parent->getPassDsa()->descriptorSetLayout);
     }
+    dsls.push_back(this->subpassDsa->descriptorSetLayout);
+    this->dummySubpassLayout = GraphicsPipeline::createPipelineLayout(ctx, dsls);
 }
 
 void RenderGraphNode::destroy_back(VulkanContext* ctx) {
-    // Nothing get
+    if (this->dummySubpassLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(ctx->device, this->dummySubpassLayout, nullptr);
+    }
 }
 
 RenderGraphNode* RenderGraph::buildNewNode() {
@@ -131,11 +133,11 @@ RenderGraphNode* RenderGraph::buildNewNode() {
     return node;
 }
 
-void RenderState::begin(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
+void RenderPass::begin(VulkanContext* ctx, VkCommandBuffer commandBuffer, uint32_t scfi) {
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = renderPass;
-    renderPassInfo.framebuffer = swapChainFrame.framebuffer->framebuffer;
+    renderPassInfo.framebuffer = ctx->swapChain.swapChainFramebuffers[scfi]->framebuffer;
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = ctx->swapChain.swapChainExtent;
 
@@ -149,59 +151,83 @@ void RenderState::begin(VkCommandBuffer commandBuffer, SwapChainFrame swapChainF
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    if (this->passDsa != nullptr) {
-        this->dsaQueue.push_back({2, this->passDsa});
+}
+
+void RenderPass::preRenderAll(VulkanContext* ctx, uint32_t frameIndex) {
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        this->nodes[i]->getRenderCallback()->preRenderSubpass(ctx, frameIndex);
     }
 }
 
-void RenderState::renderAll(VkCommandBuffer commandBuffer, SwapChainFrame swapChainFrame) {
+void RenderPass::renderAll(VkCommandBuffer commandBuffer, uint32_t frameIndex) {
+    uint32_t baseSetidx = this->superpassLayouts.size();
+    if (this->dummyPassLayout != VK_NULL_HANDLE) {
+        GraphicsPipeline::bindDescriptorSet(commandBuffer, dummyPassLayout, passDsa, frameIndex, baseSetidx);
+        baseSetidx++;
+    }
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         RenderGraphNode* node = this->nodes[i];
         if (i != 0) {
             vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
         }
-        if (node->getSubpassDsa() != nullptr) {
-            this->dsaQueue.push_back({1, node->getSubpassDsa()});
+        VkPipelineLayout dummySubpassLayout = node->getDummySubpassLayout();
+        uint32_t setidx = baseSetidx;
+        if (dummySubpassLayout != VK_NULL_HANDLE) {
+            GraphicsPipeline::bindDescriptorSet(commandBuffer, dummySubpassLayout, node->getSubpassDsa(), frameIndex, setidx);
+            setidx++;
         }
         if (node->getRenderCallback() != nullptr) {
-            node->getRenderCallback()->renderSubpassCmd(commandBuffer, this, swapChainFrame.index);
+            node->getRenderCallback()->renderSubpassCmd(commandBuffer, this, frameIndex, setidx);
         }
-        // node->configurationStore.renderAllConfigurations(this, commandBuffer, swapChainFrame.index);
     }
 }
 
-void RenderState::end(VkCommandBuffer buffer) {
+void RenderPass::end(VkCommandBuffer buffer) {
     vkCmdEndRenderPass(buffer);
 }
 
-void RenderState::destroy_back(VulkanContext* ctx) {
+void RenderPass::destroy_back(VulkanContext* ctx) {
     if (this->renderPass != VK_NULL_HANDLE) {
         vkDestroyRenderPass(ctx->device, this->renderPass, nullptr);
     }
+    vkDestroyPipelineLayout(ctx->device, dummyPassLayout, nullptr);
 }
 
-void RenderState::setupPassDescriptorSet(DescriptorSetLayoutInfo dsli) {
-    this->removePassDescriptorSet();
+void RenderPass::setSuperpassLayouts(std::vector<VkDescriptorSetLayout> _superpassLayouts) {
+    if (this->superpassLayouts.size() > 0) {
+        throw std::runtime_error("Superpass layouts may only be set once.");
+    }
+    if (this->passDsa != nullptr) {
+        throw std::runtime_error("RenderPass DSA must be set up after superpass DSA setup.");
+    }
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        if (nodes[i]->getSubpassDsa() != nullptr) {
+            throw std::runtime_error("Subpass DSA must be set up after setting superpass layouts.");
+        }
+    }
+    this->superpassLayouts = _superpassLayouts;
+}
+
+void RenderPass::setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli) {
+    if (this->passDsa != nullptr) {
+        throw std::runtime_error("RenderPass DSA may only be set up once.");
+    }
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        if (nodes[i]->getSubpassDsa() != nullptr) {
+            throw std::runtime_error("Subpass DSA must be set up after parent RenderPass DSA setup.");
+        }
+    }
     this->passDsa = new DescriptorSetArray(dsli);
     this->addLinkedResource(passDsa, true);
     this->passDsa->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->passDsa, ctx->swapChain.swapChainImages.size());
+
+    std::vector<VkDescriptorSetLayout> dsls(this->superpassLayouts);
+    dsls.push_back(this->passDsa->descriptorSetLayout);
+    this->dummyPassLayout = GraphicsPipeline::createPipelineLayout(ctx, dsls);
 }
 
-void RenderState::removePassDescriptorSet() {
-    if (this->passDsa != nullptr) {
-        this->removeLinkedResource(this->passDsa);
-        this->passDsa->destroy(ctx);
-        delete this->passDsa;
-        this->passDsa = nullptr;
-    }
-}
-
-RenderGraph::RenderGraph(VulkanContext* ctx) {
-    this->ctx = ctx;
-}
-
-RenderGraphNode* RenderGraph::buildPresentingNode() {
+RenderGraphNode* RenderGraph::buildPresentingNode(VulkanContext* ctx) {
     if (this->terminator != nullptr) {
         throw std::runtime_error("Cannot replace terminating node");
     }
@@ -229,7 +255,7 @@ void RenderGraphNode::topologicalSort(std::vector<RenderGraphNode*>* orderedNode
     orderedNodes->push_back(this);
 }
 
-RenderState* RenderGraph::buildRenderState() {
+RenderPass* RenderGraph::buildRenderState(VulkanContext* ctx) {
     // Commence topological sort
     for (RenderGraphNode* node : this->nodes) {
         node->markings = 0;
@@ -247,7 +273,7 @@ RenderState* RenderGraph::buildRenderState() {
     for (uint32_t i = 0; i < this->nodes.size(); i++) {
         this->nodes[i]->nodeIndex = i;
     }
-    RenderState* finalState = new RenderState();
+    RenderPass* finalState = new RenderPass();
     std::vector<VkAttachmentDescription> attachments;
 
     // Depth/stencil creation
@@ -340,7 +366,7 @@ RenderState* RenderGraph::buildRenderState() {
                 }
             }
             if (dependency.srcSubpass == UINT32_MAX) {
-                continue; // Filter duplicate dependencies
+                continue;  // Filter duplicate dependencies
             }
             dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             dependency.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -357,7 +383,6 @@ RenderState* RenderGraph::buildRenderState() {
     if (vkCreateRenderPass(ctx->device, &renderPassInfo, nullptr, dstRenderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass.");
     }
-    finalState->ctx = this->ctx;
     finalState->nodes = this->nodes;
     return finalState;
 }

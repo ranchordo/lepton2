@@ -1,26 +1,27 @@
 #include "GraphicalEntity.h"
 
-#include "../vulkancore/RenderState.h"
+#include "../vulkancore/RenderPass.h"
 
 using namespace lepton2::vulkancore;
 using namespace lepton2::graphics;
 
-void GraphicalEntity::initialize(GraphicalConfigurationStore* store, RenderGraphNode* node, RenderState* renderState) {
+void GraphicalEntity::initialize(VulkanContext* ctx, RenderPass* renderState, RenderGraphNode* node, GraphicalConfigurationStore* store) {
     PipelineConstraints req = this->getPipelineRequirements();
     SubpassGraphicalConfigurationStore* subpassStore = store->subpassStores[renderState].at(node->getSubpassIndex());
-    this->pipelineData = subpassStore->getConfiguration(renderState, req, this);
+    this->pipelineData = subpassStore->getConfiguration(ctx, renderState, req, this);
+    this->pipelineData.config->users.push_back(this);
     this->dsa = new DescriptorSetArray(this->pipelineData.config->layoutReference);
-    uint32_t numDescriptors = renderState->ctx->swapChain.swapChainImages.size();
-    renderState->ctx->descriptorPoolManager.allocateDescriptorSets(renderState->ctx, this->dsa, numDescriptors);
-    this->postInit(node, renderState);
+    uint32_t numDescriptors = ctx->swapChain.swapChainImages.size();
+    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->dsa, numDescriptors);
+    this->postInit(ctx, renderState, node);
 }
 
-void GraphicalEntity::render(RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex) {
+void GraphicalEntity::render(VkCommandBuffer commandBuffer, uint32_t scfi, uint32_t setidx) {
     if (this->numInstances == 0) {
         return;
     }
-    this->preRender(renderState, &dsa->singleDescriptorSets[frameIndex], frameIndex);
-    this->pipelineData.config->pipeline->bindDescriptorSet(commandBuffer, this->dsa, frameIndex, 0);
+    VkPipelineLayout pipelineLayout = this->pipelineData.config->pipeline->getPipelineLayout();
+    this->pipelineData.config->pipeline->bindDescriptorSet(commandBuffer, pipelineLayout, this->dsa, scfi, setidx);
     this->objectData->bind(commandBuffer, 0);
     vkCmdDrawIndexed(commandBuffer, this->objectData->getNumIndices(), this->numInstances, 0, 0, 0);
 }
@@ -28,5 +29,5 @@ void GraphicalEntity::render(RenderState* renderState, VkCommandBuffer commandBu
 void GraphicalEntity::destroyEntityResources(VulkanContext* ctx) {
     this->dsa->destroy(ctx);
     delete this->dsa;
-    this->pipelineData.store->freeConfiguration(ctx, this->pipelineData);
+    this->pipelineData.store->dropConfigurationHandle(ctx, this->pipelineData);
 }

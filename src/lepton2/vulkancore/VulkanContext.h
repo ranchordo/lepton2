@@ -34,8 +34,7 @@ struct SwapChainSupportDetails {
 
 class VulkanContext : public DeletableVulkanResource {
    public:
-    VulkanContext(const char* argv0, bool _enable_validation_layers, bool _print_debug_info, VkApplicationInfo appInfo, GLFWwindow* _window)
-        : allocManager(this), swapChain(this) {
+    VulkanContext(const char* argv0, bool _enable_validation_layers, bool _print_debug_info, VkApplicationInfo appInfo, GLFWwindow* _window) {
         this->window = _window;
         this->enable_validation_layers = _enable_validation_layers;
         this->print_debug_info = _print_debug_info;
@@ -43,7 +42,7 @@ class VulkanContext : public DeletableVulkanResource {
         this->createSurface();
         this->pickPhysicalDevice();
         this->createLogicalDevice();
-        this->swapChain.querySwapChain();
+        this->swapChain.querySwapChain(this);
         this->buildAllCommandPools();
         this->setRelativePaths(argv0);
     }

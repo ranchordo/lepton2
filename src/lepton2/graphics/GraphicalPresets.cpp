@@ -84,9 +84,9 @@ PipelineConstraints GenericEntity::getPipelineRequirements() {
     return ret;
 }
 
-void GenericEntity::preRender(RenderState* renderState, SingleDescriptorSet* sds, uint32_t scfi) {
+void GenericEntity::preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t scfi) {
     VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(sds->instances[0]))->uniformBuffer;
-    void* data = uniformBuffer->chonklet.mapMemory(renderState->ctx, 0);
+    void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
     memcpy(data, ubo, ubo_size);
-    uniformBuffer->chonklet.unmapMemory(renderState->ctx);
+    uniformBuffer->chonklet.unmapMemory(ctx);
 }

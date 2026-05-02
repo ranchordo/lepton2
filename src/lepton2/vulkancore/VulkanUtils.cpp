@@ -1,6 +1,6 @@
 #include "VulkanUtils.h"
 
-#include "RenderState.h"
+#include "RenderPass.h"
 #include "VulkanContext.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -213,4 +213,20 @@ VkFence createGenericFence(VulkanContext* ctx, bool signaled) {
     }
     return ret;
 }
+
+void submitDebugMessage(VulkanContext* ctx, const char* msg, VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagBitsEXT type) {
+    VkDebugUtilsMessengerCallbackDataEXT callbackData{};
+    callbackData.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT;
+    callbackData.pMessage = msg;
+    callbackData.messageIdNumber = 0;
+
+    PFN_vkSubmitDebugUtilsMessageEXT fptr = (PFN_vkSubmitDebugUtilsMessageEXT)vkGetInstanceProcAddr(ctx->instance, "vkSubmitDebugUtilsMessageEXT");
+
+    if (fptr != nullptr) {
+        fptr(ctx->instance, sev, type, &callbackData);
+    } else {
+        printf("[lepton2_internal] Failed to get function pointer for vkSubmitDebugUtilsMessageEXT\n");
+    }
+}
+
 }  // namespace lepton2::vulkancore

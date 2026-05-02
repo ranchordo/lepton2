@@ -11,8 +11,11 @@ namespace vkc = lepton2::vulkancore;
 
 class GraphicalEntity : public vkc::DeletableVulkanResource {
    public:
-    void initialize(GraphicalConfigurationStore* store, vkc::RenderGraphNode* node, vkc::RenderState* renderState);
-    void render(vkc::RenderState* renderState, VkCommandBuffer commandBuffer, uint32_t frameIndex);
+    void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderGraphNode* node, GraphicalConfigurationStore* store);
+    void render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
+    void doPreRender(vkc::VulkanContext* ctx, uint32_t frameIndex) {
+        this->preRender(ctx, &dsa->singleDescriptorSets[frameIndex], frameIndex);
+    }
 
     void destroyEntityResources(vkc::VulkanContext* ctx);
     virtual void destroy_back(vkc::VulkanContext* ctx) override {
@@ -20,9 +23,9 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     }
 
    protected:
-    virtual void postInit(vkc::RenderGraphNode* node, vkc::RenderState* renderState) {}
+    virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderGraphNode* node) {}
     virtual vkc::PipelineConstraints getPipelineRequirements() = 0;
-    virtual void preRender(vkc::RenderState* renderState, vkc::SingleDescriptorSet* sds, uint32_t scfi) {}
+    virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t scfi) {}
     void setObjectData(vkc::DeviceObjectData* objectData) { this->objectData = objectData; }
 
    private:

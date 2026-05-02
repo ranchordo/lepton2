@@ -6,70 +6,96 @@ void InFlightResources::create(VulkanContext* ctx) {
     this->imageAvailableSemaphore = createGenericSemaphore(ctx);
     this->renderFinishedSemaphore = createGenericSemaphore(ctx);
     this->inFlightFence = createGenericFence(ctx, true);
-
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-
-    if (vkAllocateCommandBuffers(ctx->device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to allocate command buffers.");
-    }
 }
 
 void InFlightResources::destroy_back(VulkanContext* ctx) {
     vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(ctx->device, inFlightFence, nullptr);
-
-    VkCommandPool owner = ctx->vk_command_pools.normalGraphics;
-    vkFreeCommandBuffers(ctx->device, owner, 1, &commandBuffer);
 }
 
-VulkanLoop::VulkanLoop(RenderState* renderState, uint32_t numInFlightFrames) {
+VulkanLoop::VulkanLoop(RenderPass* renderState, uint32_t numInFlightFrames) {
     this->renderState = renderState;
     this->numInFlightFrames = numInFlightFrames;
     this->inFlightResources.resize(numInFlightFrames);
 }
 
-void VulkanLoop::initialize() {
-    for (uint32_t i = 0; i < numInFlightFrames; i++) {
-        this->inFlightResources[i].create(renderState->ctx);
+void VulkanLoop::fillCommandBuffers(VulkanContext* ctx) {
+    uint32_t target = ctx->swapChain.swapChainImages.size();
+    uint32_t prevsize = this->commandBuffers.size();
+    if (prevsize < target) {
+        uint32_t growth = target - prevsize;
+        this->commandBuffers.resize(target);
+
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = growth;
+
+        if (vkAllocateCommandBuffers(ctx->device, &allocInfo, commandBuffers.data() + prevsize) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate command buffers.");
+        }
     }
 }
 
-bool VulkanLoop::shouldLoopTerminate() {
-    return glfwWindowShouldClose(renderState->ctx->window);
+void VulkanLoop::initialize(VulkanContext* ctx) {
+    for (uint32_t i = 0; i < numInFlightFrames; i++) {
+        this->inFlightResources[i].create(ctx);
+    }
+    this->fillCommandBuffers(ctx);
+    this->forceRecordCommandBuffers(ctx);
 }
 
-void VulkanLoop::process() {
+bool VulkanLoop::shouldLoopTerminate(VulkanContext* ctx) {
+    return glfwWindowShouldClose(ctx->window);
+}
+
+void VulkanLoop::forceRecordCommandBuffers(VulkanContext* ctx) {
+    for (uint32_t scfi = 0; scfi < ctx->swapChain.swapChainImages.size(); scfi++) {
+        VkCommandBuffer commandBuffer = commandBuffers[scfi];
+        vkResetCommandBuffer(commandBuffer, 0);
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0;
+        beginInfo.pInheritanceInfo = nullptr;
+
+        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to begin recording command buffer.");
+        }
+
+        ctx->swapChain.updateViewportScissor(commandBuffer);
+
+        for (VulkanLoopModifier* loopmod : this->loopModifiers) { loopmod->preRender(scfi); }
+        renderState->begin(ctx, commandBuffer, scfi);
+        renderState->renderAll(commandBuffer, scfi);
+        renderState->end(commandBuffer);
+
+        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to record command buffer.");
+        }
+    }
+}
+
+void VulkanLoop::process(VulkanContext* ctx) {
     glfwPollEvents();
     InFlightResources* ifr = &this->inFlightResources[this->inFlightFrameCount];
-    VulkanContext* ctx = this->renderState->ctx;
     vkWaitForFences(ctx->device, 1, &ifr->inFlightFence, VK_TRUE, UINT64_MAX);
     vkResetFences(ctx->device, 1, &ifr->inFlightFence);
-    SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(ifr->imageAvailableSemaphore);
-    vkResetCommandBuffer(ifr->commandBuffer, 0);
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0;
-    beginInfo.pInheritanceInfo = nullptr;
-
-    if (vkBeginCommandBuffer(ifr->commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to begin recording command buffer.");
+    SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(ctx, ifr->imageAvailableSemaphore);
+    if (swapChainFrame.index == UINT32_MAX) {
+        // Swapchain failure, rebuild
+        ctx->swapChain.rebuildSwapChain(ctx);
+        fillCommandBuffers(ctx);
+        forceRecordCommandBuffers(ctx);
+        if (vkQueueSubmit(ctx->vk_queues.graphics, 0, nullptr, ifr->inFlightFence) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to submit dummy swapchain rebuild queue.\n");
+        }
+        return;
     }
+    VkCommandBuffer commandBuffer = this->commandBuffers[swapChainFrame.index];
 
-    ctx->swapChain.updateViewportScissor(ifr->commandBuffer);
-
-    for (VulkanLoopModifier* loopmod : this->loopModifiers) { loopmod->preRender(swapChainFrame.index); }
-    renderState->begin(ifr->commandBuffer, swapChainFrame);
-    renderState->renderAll(ifr->commandBuffer, swapChainFrame);
-    renderState->end(ifr->commandBuffer);
-
-    if (vkEndCommandBuffer(ifr->commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to record command buffer.");
-    }
+    renderState->preRenderAll(ctx, swapChainFrame.index);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -78,11 +104,11 @@ void VulkanLoop::process() {
     submitInfo.pWaitSemaphores = &ifr->imageAvailableSemaphore;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &ifr->commandBuffer;
+    submitInfo.pCommandBuffers = &commandBuffer;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &ifr->renderFinishedSemaphore;
     if (vkQueueSubmit(ctx->vk_queues.graphics, 1, &submitInfo, ifr->inFlightFence) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to submit command buffer");
+        throw std::runtime_error("Failed to submit command buffer.");
     }
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -94,8 +120,19 @@ void VulkanLoop::process() {
     presentInfo.pImageIndices = &swapChainFrame.index;
     presentInfo.pResults = nullptr;
     VkResult result = vkQueuePresentKHR(ctx->vk_queues.present, &presentInfo);
+
+    if (result == VK_SUCCESS) { // Explicit swapchain extent check
+        VkExtent2D knownSwapChainExtent = ctx->swapChain.swapChainExtent;
+        VkExtent2D extent = SwapChain::getCurrentExtent(ctx);
+        if (extent.width != knownSwapChainExtent.width || extent.height != knownSwapChainExtent.height) {
+            result = VK_SUBOPTIMAL_KHR;
+        }
+    }
+
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        ctx->swapChain.rebuildSwapChain();
+        ctx->swapChain.rebuildSwapChain(ctx);
+        fillCommandBuffers(ctx);
+        forceRecordCommandBuffers(ctx);
         return;
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to present swap chain image.");
@@ -106,12 +143,17 @@ void VulkanLoop::process() {
     }
 }
 
-void VulkanLoop::terminateLoop() {
-    vkDeviceWaitIdle(renderState->ctx->device);
+void VulkanLoop::terminateLoop(VulkanContext* ctx) {
+    vkDeviceWaitIdle(ctx->device);
 }
 
 void VulkanLoop::destroy_back(VulkanContext* ctx) {
     for (uint32_t i = 0; i < numInFlightFrames; i++) {
-        this->inFlightResources[i].destroy(renderState->ctx);
+        this->inFlightResources[i].destroy(ctx);
+    }
+    if (commandBuffers.size() > 0) {
+        VkCommandPool owner = ctx->vk_command_pools.normalGraphics;
+        vkFreeCommandBuffers(ctx->device, owner, commandBuffers.size(), commandBuffers.data());
+        commandBuffers.clear();
     }
 }

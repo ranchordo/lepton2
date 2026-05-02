@@ -49,12 +49,15 @@ class GraphicsPipeline : public DeletableVulkanResource {
                      VkRenderPass renderPass, const PipelineInfo& cInfo);
     void bind(VkCommandBuffer commandBuffer);
     VkPipeline getPipeline() { return this->pipeline; }
-    void bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index, uint32_t setidx);
+    static void bindDescriptorSet(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout,
+                                  DescriptorSetArray* dsa, uint32_t index, uint32_t setidx);
     void destroy_back(VulkanContext* ctx) override;
     PipelineConstraints creationConstraints;
     VkPipelineLayout getPipelineLayout() {
         return this->pipelineLayout;
     }
+
+    static VkPipelineLayout createPipelineLayout(VulkanContext* ctx, std::vector<VkDescriptorSetLayout> dsl);
 
    private:
     VkShaderModule buildShaderModule(VulkanContext* ctx,

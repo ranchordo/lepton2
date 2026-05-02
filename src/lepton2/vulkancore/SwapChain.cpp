@@ -1,7 +1,7 @@
 #include "SwapChain.h"
 
 #include "Descriptors.h"
-#include "RenderState.h"
+#include "RenderPass.h"
 #include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
@@ -12,6 +12,7 @@ static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFor
             return availableFormat;
         }
     }
+    printf("Warning: Using zeroth VkSurfaceFormatKHR\n");
     return availableFormats[0];  // TODO: Better ranking system.
 }
 
@@ -24,23 +25,24 @@ static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
+VkExtent2D SwapChain::getCurrentExtent(VulkanContext* ctx) {
+    int width, height;
+    glfwGetFramebufferSize(ctx->window, &width, &height);
+    return {(uint32_t)width, (uint32_t)height};
+}
+
 static VkExtent2D chooseSwapExtent(VulkanContext* ctx, const VkSurfaceCapabilitiesKHR& capabilities) {
     if (capabilities.currentExtent.width != UINT32_MAX) {
         return capabilities.currentExtent;
     } else {
-        int width, height;
-        glfwGetFramebufferSize(ctx->window, &width, &height);
-
-        VkExtent2D actualExtent = {
-            (uint32_t)width,
-            (uint32_t)height};
+        VkExtent2D actualExtent = SwapChain::getCurrentExtent(ctx);
         actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
         return actualExtent;
     }
 }
 
-void SwapChain::querySwapChain() {
+void SwapChain::querySwapChain(VulkanContext* ctx) {
     SwapChainSupportDetails swapChainSupport = ctx->querySwapChainSupport(ctx->physicalDevice);
     this->swapChainQueryResults.surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
     this->swapChainQueryResults.presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
@@ -54,7 +56,7 @@ void SwapChain::querySwapChain() {
     this->swapChainImageFormat = swapChainQueryResults.surfaceFormat.format;
 }
 
-void SwapChain::buildSwapChain(RenderState* renderState) {
+void SwapChain::buildSwapChain(VulkanContext* ctx, RenderPass* renderState) {
     this->renderState = renderState;
 
     VkSwapchainCreateInfoKHR createInfo{};
@@ -139,16 +141,16 @@ void SwapChain::buildSwapChain(RenderState* renderState) {
     std::vector<VkDescriptorBufferInfo> bufferInfos;
     std::vector<VkWriteDescriptorSet> writeInfos;
     for (DescriptorSetUpdateInfo* updateInfo : this->descriptorUpdates) {
-        DescriptorWriteInfoContainer dwic = updateInfo->instance->getWriteInfo(this->ctx, updateInfo->dstSet, updateInfo->dstBinding);
+        DescriptorWriteInfoContainer dwic = updateInfo->instance->getWriteInfo(ctx, updateInfo->dstSet, updateInfo->dstBinding);
         imageInfos.push_back(dwic.imageInfo);
         bufferInfos.push_back(dwic.bufferInfo);
         writeInfos.push_back(dwic.writeInfo);
     }
     for (uint32_t i = 0; i < writeInfos.size(); i++) {
-        writeInfos[i].pImageInfo = &imageInfos[i]; // Must keep alive
-        writeInfos[i].pBufferInfo = &bufferInfos[i]; // Must keep alive
+        writeInfos[i].pImageInfo = &imageInfos[i];    // Must keep alive
+        writeInfos[i].pBufferInfo = &bufferInfos[i];  // Must keep alive
     }
-    vkUpdateDescriptorSets(this->ctx->device, writeInfos.size(), writeInfos.data(), 0, nullptr);
+    vkUpdateDescriptorSets(ctx->device, writeInfos.size(), writeInfos.data(), 0, nullptr);
 }
 
 void SwapChain::destroy_back(VulkanContext* ctx) {
@@ -184,7 +186,7 @@ void SwapChain::destroy_back(VulkanContext* ctx) {
     vkDestroySwapchainKHR(ctx->device, this->swapChain, nullptr);
 }
 
-void SwapChain::deinitSwapChain() {
+void SwapChain::deinitSwapChain(VulkanContext* ctx) {
     if (this->renderState == nullptr) {
         throw std::runtime_error("Can't rebuild swap chain without building it first.");
     }
@@ -196,13 +198,13 @@ void SwapChain::deinitSwapChain() {
     }
 
     vkDeviceWaitIdle(ctx->device);
-    this->destroy_back(this->ctx);
+    this->destroy_back(ctx);
 }
 
-void SwapChain::rebuildSwapChain() {
-    this->deinitSwapChain();
-    this->querySwapChain();
-    this->buildSwapChain(this->renderState);
+void SwapChain::rebuildSwapChain(VulkanContext* ctx) {
+    this->deinitSwapChain(ctx);
+    this->querySwapChain(ctx);
+    this->buildSwapChain(ctx, this->renderState);
 }
 
 void SwapChain::updateViewportScissor(VkCommandBuffer commandBuffer) {
@@ -220,20 +222,21 @@ void SwapChain::updateViewportScissor(VkCommandBuffer commandBuffer) {
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 
-SwapChainFrame SwapChain::getFrameInternal(VkSemaphore semaphore) {
+SwapChainFrame SwapChain::getFrameInternal(VulkanContext* ctx, VkSemaphore semaphore) {
     SwapChainFrame frame;
     frame.result = vkAcquireNextImageKHR(ctx->device, swapChain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &frame.index);
     return frame;
 }
 
-SwapChainFrame SwapChain::getFrame(VkSemaphore semaphore) {
-    SwapChainFrame frame = this->getFrameInternal(semaphore);
+SwapChainFrame SwapChain::getFrame(VulkanContext* ctx, VkSemaphore semaphore) {
+    SwapChainFrame frame = this->getFrameInternal(ctx, semaphore);
     if (frame.result == VK_ERROR_OUT_OF_DATE_KHR) {
-        this->rebuildSwapChain();
-        frame = this->getFrameInternal(semaphore);
+        submitDebugMessage(ctx, "Failed to acquire swapchain frame index (VK_ERROR_OUT_OF_DATE_KHR).", MSG_SEV_INFO, MSG_TYPE_GENERAL);
+        return {nullptr, nullptr, UINT32_MAX, frame.result};
     }
     if (frame.result != VK_SUCCESS && frame.result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("Failed to grab swapchain index.");
+        printf("(long)VkResult = %ld\n", (long)frame.result);
+        throw std::runtime_error("Unexpected swapchain acquisition failure from vkAcquireNextImageKHR.");
     }
     frame.framebuffer = this->swapChainFramebuffers[frame.index];
     frame.image = this->swapChainImages[frame.index];

@@ -1,7 +1,7 @@
 #include "lepton2/graphics/GraphicalPresets.h"
 #include "lepton2/vulkancore/ObjectData.h"
 #include "lepton2/vulkancore/Pipelines.h"
-#include "lepton2/vulkancore/RenderState.h"
+#include "lepton2/vulkancore/RenderPass.h"
 #include "lepton2/vulkancore/Textures.h"
 #include "lepton2/vulkancore/VulkanContext.h"
 #include "lepton2/vulkancore/VulkanLoop.h"
@@ -54,18 +54,18 @@ int main(int argc, char** argv) {
     ctx = new VulkanContext(argv[0], false, false, appInfo, window);
 #endif
 
-    RenderGraph renderGraph(ctx);
-    RenderGraphNode* node = renderGraph.buildPresentingNode();
+    RenderGraph renderGraph;
+    RenderGraphNode* node = renderGraph.buildPresentingNode(ctx);
 
     RenderGraphNode* node1 = renderGraph.buildNewNode();
     node1->addColorAttachment(defaultColorAttachmentRTIC(VK_FORMAT_R16G16B16A16_SFLOAT), true);
     node->connectFromNode(node1, 0, 0);
 
-    RenderState* renderState = renderGraph.buildRenderState();
+    RenderPass* renderState = renderGraph.buildRenderState(ctx);
     renderState->addLinkedResource(node, true);
     renderState->addLinkedResource(node1, true);
     renderState->addLinkedResource(&renderGraph, false);
-    ctx->swapChain.buildSwapChain(renderState);
+    ctx->swapChain.buildSwapChain(ctx, renderState);
 
     GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
     store->addAllSubpasses(renderState);
@@ -109,10 +109,10 @@ int main(int argc, char** argv) {
             PipelineConstraints req("default/simple_axion", dsli, simplePresetVsd);
             return req;
         }
-        void postInit(RenderGraphNode* node, RenderState* renderState) override {
+        void postInit(VulkanContext* ctx, RenderPass* pass, RenderGraphNode* node) override {
             this->start_time_point = startTiming();
         }
-        void preRender(RenderState* renderState, SingleDescriptorSet* sds, uint32_t scfi) override {
+        void preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t scfi) override {
             UniformBufferObject ubo{};
             float elapsedSeconds = (float)getElapsedSeconds(start_time_point);
             ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, zpos + sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
@@ -143,25 +143,25 @@ int main(int argc, char** argv) {
 
     sceneContainer.addLinkedResource(devData, true);
     rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
-    rectangleEntity.initialize(store, node1, renderState);
+    rectangleEntity.initialize(ctx, renderState, node1, store);
     sceneContainer.addLinkedResource(&rectangleEntity, false);
 
     decltype(rectangleEntity) rectangleEntity1;
     rectangleEntity1._create(ctx, devData, glm::radians(-90.0f), -0.2f, texture);
-    rectangleEntity1.initialize(store, node1, renderState);
+    rectangleEntity1.initialize(ctx, renderState, node1, store);
     sceneContainer.addLinkedResource(&rectangleEntity1, false);
 
     StaticScreenEntity screenEntity(ctx, "default/post_process", {&node1->getColorAttachments()->at(0)});
-    screenEntity.initialize(store, node, renderState);
+    screenEntity.initialize(ctx, renderState, node, store);
     sceneContainer.addLinkedResource(&screenEntity, false);
 
     mainLoop.addLinkedResource(&sceneContainer, false);
 
-    mainLoop.initialize();
+    mainLoop.initialize(ctx);
     uint32_t frame_count = 0;
-    while (!mainLoop.shouldLoopTerminate()) {
+    while (!mainLoop.shouldLoopTerminate(ctx)) {
         auto time_point = startTiming();
-        mainLoop.process();
+        mainLoop.process(ctx);
         if (frame_count % 1000 == 0) {
             double fp = getElapsedSeconds(time_point);
             printf("Interval (μs): %lf\n", fp * 1000000);
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         }
         frame_count++;
     }
-    mainLoop.terminateLoop();
+    mainLoop.terminateLoop(ctx);
 
     mainLoop.destroy(ctx);
     renderState->destroy(ctx);

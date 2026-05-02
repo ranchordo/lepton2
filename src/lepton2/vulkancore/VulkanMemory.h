@@ -40,17 +40,15 @@ struct MemoryChonklet : public DeletableVulkanResource {
 
 class VulkanAllocationManager : public DeletableVulkanResource {
    public:
-    VulkanAllocationManager(VulkanContext* ctx) { this->ctx = ctx; }
-    MemoryChonklet findMemory(VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex);
-    void freeChonklet(MemoryChonklet chonklet);
+    MemoryChonklet findMemory(VulkanContext* ctx, VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex);
+    void freeChonklet(VulkanContext* ctx, MemoryChonklet chonklet);
     void destroy_back(VulkanContext* ctx) override;
 
    private:
-    MemoryChonkus* buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex);
+    MemoryChonkus* buildChonkus(VulkanContext* ctx, VkDeviceSize size, uint32_t memoryTypeIndex);
     MemoryChonkletEntry* findAvailableEntry(MemoryChonkus* chonkus, VkDeviceSize size, VkDeviceSize alignment);
     void deleteEntry(MemoryChonkus* chonkus, MemoryChonkletEntry* entry);
-    void checkChonkusDeletion(MemoryChonkus* chonkus);
+    void checkChonkusDeletion(VulkanContext* ctx, MemoryChonkus* chonkus);
     std::unordered_map<uint32_t, std::vector<MemoryChonkus*>> chonki;
-    VulkanContext* ctx;
 };
 }  // namespace lepton2::vulkancore

@@ -2,7 +2,7 @@
 
 #include "../utils/LeptonUtils.h"
 #include "ObjectData.h"
-#include "RenderState.h"
+#include "RenderPass.h"
 #include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
@@ -42,6 +42,23 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
         throw std::runtime_error("Failed to create shader module.");
     }
     return shaderModule;
+}
+
+VkPipelineLayout GraphicsPipeline::createPipelineLayout(VulkanContext* ctx, std::vector<VkDescriptorSetLayout> dsl) {
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    pipelineLayoutInfo.setLayoutCount = (uint32_t)(dsl.size());
+    pipelineLayoutInfo.pSetLayouts = dsl.data();
+
+    VkPipelineLayout pipelineLayout;
+
+    if (vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create pipeline layout.");
+    }
+
+    return pipelineLayout;
 }
 
 GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderGraphNode* node, VkRenderPass renderPass,
@@ -135,17 +152,6 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderGraphNode* node, Vk
     colorBlending.attachmentCount = colorBlendAttachments.size();
     colorBlending.pAttachments = colorBlendAttachments.data();
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-    pipelineLayoutInfo.pPushConstantRanges = nullptr;
-    pipelineLayoutInfo.setLayoutCount = (uint32_t)(cInfo.setLayouts.size());
-    pipelineLayoutInfo.pSetLayouts = cInfo.setLayouts.data();
-
-    if (vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create pipeline layout.");
-    }
-
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
@@ -158,6 +164,10 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderGraphNode* node, Vk
     depthStencil.back = cInfo.constraints.stencilState;
     depthStencil.front = cInfo.constraints.stencilState;
 
+    // Create pipeline layout
+    this->pipelineLayout = GraphicsPipeline::createPipelineLayout(ctx, cInfo.setLayouts);
+
+    // Create pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
@@ -185,8 +195,10 @@ void GraphicsPipeline::bind(VkCommandBuffer commandBuffer) {
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
 }
 
-void GraphicsPipeline::bindDescriptorSet(VkCommandBuffer commandBuffer, DescriptorSetArray* dsa, uint32_t index, uint32_t setidx) {
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, setidx, 1, &dsa->singleDescriptorSets[index].descriptorSet, 0, nullptr);
+void GraphicsPipeline::bindDescriptorSet(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout,
+                                         DescriptorSetArray* dsa, uint32_t index, uint32_t setidx) {
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, setidx, 1,
+                            &dsa->singleDescriptorSets[index].descriptorSet, 0, nullptr);
 }
 
 void GraphicsPipeline::destroy_back(VulkanContext* ctx) {

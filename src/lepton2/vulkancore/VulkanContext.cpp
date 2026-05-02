@@ -4,10 +4,6 @@
 
 #include "../utils/LeptonUtils.h"
 
-using namespace lepton2::vulkancore;
-
-#define VALIDATION_MESSAGE_TYPE_MASK (~VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
-
 #define EXTBuildProxyFuncptr(name) ((PFN_##name)vkGetInstanceProcAddr(instance, #name))
 #define EXTDoProxy(name, ...) ((EXTBuildProxyFuncptr(name) == nullptr) ? (VK_ERROR_EXTENSION_NOT_PRESENT) : (EXTBuildProxyFuncptr(name)(__VA_ARGS__)))
 #define EXTDoVoidProxy(name, ...)                \
@@ -15,10 +11,10 @@ using namespace lepton2::vulkancore;
         EXTBuildProxyFuncptr(name)(__VA_ARGS__); \
     }
 
-const std::vector<const char*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"};
-const std::vector<const char*> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+using namespace lepton2::vulkancore;
+
+const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
+const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 static void glfwErrorCallback(int code, const char* message) {
     printf("GLFW error, code %d: \"%s\"\n", code, message);
@@ -44,19 +40,25 @@ bool checkValidationLayerSupport() {
     return true;
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
-    printf("debugUtilsMessenger callback: %s\n", pCallbackData->pMessage);
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT sev,
+                                                    VkDebugUtilsMessageTypeFlagsEXT type,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* data, void* pUserData) {
+    printf("[vk_debug_utils] ");
+    if (sev & MSG_SEV_ERROR) printf("[sev_error] ");
+    if (sev & MSG_SEV_WARN) printf("[sev_warning] ");
+    if (sev & MSG_SEV_INFO) printf("[sev_info] ");
+    if (sev & MSG_SEV_VERBOSE) printf("[sev_verbose] ");
+    if (type & MSG_TYPE_GENERAL) printf("[type_general] ");
+    if (type & MSG_TYPE_VALIDATION) printf("[type_validation] ");
+    if (type & MSG_TYPE_PERFORMANCE) printf("[type_performance] ");
+    printf("%s\n", data->pMessage);
     return VK_FALSE;
 }
 
 void buildDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& msgCreateInfo) {
     msgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    msgCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    msgCreateInfo.messageType = (VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) & VALIDATION_MESSAGE_TYPE_MASK;
+    msgCreateInfo.messageSeverity = MSG_SEV_INFO | MSG_SEV_WARN | MSG_SEV_ERROR;
+    msgCreateInfo.messageType = MSG_TYPE_GENERAL | MSG_TYPE_VALIDATION | MSG_TYPE_PERFORMANCE;
     msgCreateInfo.pfnUserCallback = debugCallback;
     msgCreateInfo.pUserData = nullptr;
 }
@@ -95,6 +97,9 @@ void VulkanContext::createInstance(VkApplicationInfo appInfo) {
         if (EXTDoProxy(vkCreateDebugUtilsMessengerEXT, instance, &msgCreateInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create debug utils messenger.");
         }
+
+        // Test validation layers
+        submitDebugMessage(this, "Lepton2 internal: Debug messenger callback active.\n", MSG_SEV_WARN, MSG_TYPE_VALIDATION);
     }
 }
 

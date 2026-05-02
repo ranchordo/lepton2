@@ -16,7 +16,7 @@ void MemoryChonkus::destroy_back(VulkanContext* ctx) {
 
 void MemoryChonklet::destroy_back(VulkanContext* ctx) {
     if (this->chonkus != nullptr) {
-        ctx->allocManager.freeChonklet(*this);
+        ctx->allocManager.freeChonklet(ctx, *this);
     }
 }
 
@@ -64,7 +64,7 @@ VkDeviceSize getNewSize(VkDeviceSize reqAllocSize) {
     return candidate2;
 }
 
-MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex) {
+MemoryChonklet VulkanAllocationManager::findMemory(VulkanContext* ctx, VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex) {
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Requested allocation of size %d, type %d.\n", (int)size, (int)memoryTypeIndex);
 #endif
@@ -72,7 +72,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, VkDeviceSi
     MemoryChonkus* selectedChonkus;
     if (chonki.count(memoryTypeIndex) == 0 || chonki[memoryTypeIndex].size() == 0) {
         VkDeviceSize newSize = getNewSize(size);
-        MemoryChonkus* newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
+        MemoryChonkus* newChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
         printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus->memory);
 #endif
@@ -92,7 +92,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, VkDeviceSi
         }
         if (cEntry == nullptr) {
             VkDeviceSize newSize = getNewSize(size);
-            MemoryChonkus* newChonkus = this->buildChonkus(newSize, memoryTypeIndex);
+            MemoryChonkus* newChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
             printf("Building new chonkus on existing vector with size %d, pointer is %p, ", (int)newSize, newChonkus->memory);
 #endif
@@ -147,7 +147,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VkDeviceSize size, VkDeviceSi
     return ret;
 }
 
-MemoryChonkus* VulkanAllocationManager::buildChonkus(VkDeviceSize size, uint32_t memoryTypeIndex) {
+MemoryChonkus* VulkanAllocationManager::buildChonkus(VulkanContext* ctx, VkDeviceSize size, uint32_t memoryTypeIndex) {
     MemoryChonkus* chonkus = new MemoryChonkus();
     chonkus->allocationSize = size;
     chonkus->entry = new MemoryChonkletEntry(0, size, nullptr, nullptr);
@@ -158,7 +158,7 @@ MemoryChonkus* VulkanAllocationManager::buildChonkus(VkDeviceSize size, uint32_t
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
-    if (vkAllocateMemory(this->ctx->device, &allocInfo, nullptr, &chonkus->memory) != VK_SUCCESS) {
+    if (vkAllocateMemory(ctx->device, &allocInfo, nullptr, &chonkus->memory) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate chonkus memory.");
     }
     return chonkus;
@@ -213,7 +213,7 @@ MemoryChonkletEntry* VulkanAllocationManager::findAvailableEntry(MemoryChonkus* 
     return nullptr;
 }
 
-void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
+void VulkanAllocationManager::freeChonklet(VulkanContext* ctx, MemoryChonklet chonklet) {
     CHECK_DESTRUCTION();
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Trying to free offs:%d, size:%d, ck:%p\n", (int)chonklet.offset, (int)chonklet.size, chonklet.chonkus);
@@ -253,7 +253,7 @@ void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
                     printFreeList(chonklet.chonkus);
                     printf("\n");
 #endif
-                    this->checkChonkusDeletion(chonklet.chonkus);
+                    this->checkChonkusDeletion(ctx, chonklet.chonkus);
                     return;
                 }
                 current2 = current2->next;
@@ -261,7 +261,7 @@ void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
 #ifdef DEBUG_MEMORY_MANAGER
             printf("No secondary coalescence.\n");
 #endif
-            this->checkChonkusDeletion(chonklet.chonkus);
+            this->checkChonkusDeletion(ctx, chonklet.chonkus);
             return;
         }
         current = current->next;
@@ -281,7 +281,7 @@ void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
             printFreeList(chonklet.chonkus);
             printf("\n");
 #endif
-            this->checkChonkusDeletion(chonklet.chonkus);
+            this->checkChonkusDeletion(ctx, chonklet.chonkus);
             return;
         }
         current = current->next;
@@ -295,10 +295,10 @@ void VulkanAllocationManager::freeChonklet(MemoryChonklet chonklet) {
     printFreeList(chonklet.chonkus);
     printf("\n");
 #endif
-    this->checkChonkusDeletion(chonklet.chonkus);
+    this->checkChonkusDeletion(ctx, chonklet.chonkus);
 }
 
-void VulkanAllocationManager::checkChonkusDeletion(MemoryChonkus* chonkus) {
+void VulkanAllocationManager::checkChonkusDeletion(VulkanContext* ctx, MemoryChonkus* chonkus) {
 #ifdef DEBUG_MEMORY_MANAGER
     printf("Checking for deletion condition for chonkus with type %d\n", (int)chonkus->memory_type);
 #endif
@@ -333,12 +333,12 @@ void VulkanAllocationManager::checkChonkusDeletion(MemoryChonkus* chonkus) {
 #ifdef DEBUG_MEMORY_MANAGER
             printf("new length is %d\n", (int)allChonki.size());
 #endif
-            chonkus->destroy_back(this->ctx);
+            chonkus->destroy_back(ctx);
             delete chonkus;
             return;
         }
     }
-    throw std::runtime_error("Failed to find chonkus to delete!!!");
+    throw std::runtime_error("Failed to find chonkus to delete.");
 }
 
 void VulkanAllocationManager::destroy_back(VulkanContext* ctx) {

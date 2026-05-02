@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RenderState.h"
+#include "RenderPass.h"
 #include "VulkanUtils.h"
 
 namespace lepton2::vulkancore {
@@ -9,7 +9,6 @@ struct InFlightResources : public DeletableVulkanResource {
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
     VkFence inFlightFence;
-    VkCommandBuffer commandBuffer;
     void create(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;
 };
@@ -22,20 +21,25 @@ class VulkanLoopModifier : public DeletableVulkanResource {
 
 class VulkanLoop : public DeletableVulkanResource {
    public:
-    VulkanLoop(RenderState* renderState, uint32_t numInFlightFrames);
-    void initialize();
-    bool shouldLoopTerminate();
-    void process();
-    void terminateLoop();
+    VulkanLoop(RenderPass* renderState, uint32_t numInFlightFrames);
+    void initialize(VulkanContext* ctx);
+    bool shouldLoopTerminate(VulkanContext* ctx);
+    void process(VulkanContext* ctx);
+    void terminateLoop(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;
     void addLoopModifier(VulkanLoopModifier* loopmod) { this->loopModifiers.push_back(loopmod); }
 
+    void forceRecordCommandBuffers(VulkanContext* ctx);
+
    private:
-    RenderState* renderState;
+    RenderPass* renderState;
     uint32_t numInFlightFrames;
     uint32_t inFlightFrameCount = 0;
     std::vector<InFlightResources> inFlightResources;
+    std::vector<VkCommandBuffer> commandBuffers;
     std::vector<VulkanLoopModifier*> loopModifiers;
+
+    void fillCommandBuffers(VulkanContext* ctx);
 
     friend class VulkanLoopModifier;
 };

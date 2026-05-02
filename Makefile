@@ -51,7 +51,7 @@ clean_resources:
 
 # Test native build #
 
-test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV
+test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV -g
 test: LDFLAGS = $(BASELDFLAGS)
 test: OUTPUT = build/output/$(BASE_OUTPUT)
 test: build-base assets

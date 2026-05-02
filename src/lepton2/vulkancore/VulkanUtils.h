@@ -51,10 +51,21 @@
     }
 
 // Don't ask.
-#define SEPPUKU() \
-    { *(int*)0 = 0; }
+#define SEPPUKU()     \
+    {                 \
+        *(int*)0 = 0; \
+    }
 
 namespace lepton2::vulkancore {
+
+#define MSG_SEV_VERBOSE (VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+#define MSG_SEV_INFO (VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+#define MSG_SEV_WARN (VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+#define MSG_SEV_ERROR (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+
+#define MSG_TYPE_GENERAL (VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+#define MSG_TYPE_VALIDATION (VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+#define MSG_TYPE_PERFORMANCE (VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
 
 class VulkanContext;
 class VulkanImage;
@@ -125,4 +136,6 @@ extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst,
                        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
 extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
 extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
+extern void submitDebugMessage(VulkanContext* ctx, const char* msg, VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagBitsEXT type);
+
 }  // namespace lepton2::vulkancore

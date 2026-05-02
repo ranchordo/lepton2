@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../vulkancore/RenderState.h"
+#include "../vulkancore/RenderPass.h"
 #include "GraphicalEntity.h"
 
 namespace lepton2::graphics::graphicalpresets {
@@ -42,7 +42,7 @@ class GenericEntity : public GraphicalEntity {
    public:
     GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, vkc::DeviceObjectData* objectData, vkc::VertexStructDescriptor vsd = objLoadVsd);
     vkc::PipelineConstraints getPipelineRequirements() override;
-    void preRender(vkc::RenderState* renderState, vkc::SingleDescriptorSet* sds, uint32_t scfi) override;
+    void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t scfi) override;
     void setTexture(vkc::Texture* texture) { this->texture = texture; }
     virtual void logic() {};
 

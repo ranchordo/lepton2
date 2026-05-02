@@ -6,7 +6,7 @@
 
 namespace lepton2::vulkancore {
 class VulkanContext;
-class RenderState;
+class RenderPass;
 struct DescriptorSetUpdateInfo;
 
 struct SwapChainFrame {
@@ -18,12 +18,10 @@ struct SwapChainFrame {
 
 class SwapChain : public DeletableVulkanResource {
    public:
-    SwapChain(VulkanContext* ctx) { this->ctx = ctx; }
     void updateViewportScissor(VkCommandBuffer commandBuffer);
-    SwapChainFrame getFrame(VkSemaphore semaphore);
+    SwapChainFrame getFrame(VulkanContext* ctx, VkSemaphore semaphore);
     VkSwapchainKHR swapChain;
-    VulkanContext* ctx;
-    RenderState* renderState;
+    RenderPass* renderState;
     std::vector<VulkanImage*> swapChainImages;
     std::vector<Framebuffer*> swapChainFramebuffers;
     VkFormat swapChainImageFormat;
@@ -36,15 +34,16 @@ class SwapChain : public DeletableVulkanResource {
     } swapChainQueryResults;
     bool clearSwapChain = true;  // Change whether swapchain images are cleared on render
     void destroy_back(VulkanContext* ctx) override;
-    void querySwapChain();
-    void buildSwapChain(RenderState* renderState);
+    void querySwapChain(VulkanContext* ctx);
+    void buildSwapChain(VulkanContext* ctx, RenderPass* renderState);
     // Only used for manual rebuilding
-    void deinitSwapChain();
-    void rebuildSwapChain();
+    void deinitSwapChain(VulkanContext* ctx);
+    void rebuildSwapChain(VulkanContext* ctx);
+    static VkExtent2D getCurrentExtent(VulkanContext* ctx);
     std::unordered_set<DescriptorSetUpdateInfo*> descriptorUpdates;
 
    private:
-    SwapChainFrame getFrameInternal(VkSemaphore semaphore);
+    SwapChainFrame getFrameInternal(VulkanContext* ctx, VkSemaphore semaphore);
     std::vector<VulkanImage*> renderTargetImages;
     std::vector<std::vector<VulkanImage*>*> swapChainCreationTrackers;
 };

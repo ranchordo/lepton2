@@ -19,4 +19,4 @@ extern std::filesystem::path getExecutableLocation(const char* argv0, bool force
 extern std::vector<char> readFile(const std::string& filename);
 extern vkc::HostObjectData* loadObjFile(vkc::VulkanContext* ctx, const char* filename);
 
-} // namespace lepton2::utils
+}  // namespace lepton2::utils
