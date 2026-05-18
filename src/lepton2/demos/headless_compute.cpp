@@ -27,6 +27,7 @@ struct SSBO {
 };
 
 int demo_headless_compute(int argc, char** argv) {
+    // GLFW initialization would normally go here, but we're running headless.
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pNext = nullptr;
@@ -41,6 +42,7 @@ int demo_headless_compute(int argc, char** argv) {
     VulkanContext* ctx = new VulkanContext(argv[0], false, false, appInfo, nullptr);
 #endif
 
+    // Set up SSBO for this compute shader launch
     DescriptorSetLayoutInfo dsli;
     DescriptorInfo descInfo;
     descInfo.storageBufferData.bufferSize = sizeof(SSBO);
@@ -48,39 +50,42 @@ int demo_headless_compute(int argc, char** argv) {
     descInfo.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
     dsli.addNewBinding(descInfo, 1);
 
+    // Allocate/instantiate descriptor instances
     DescriptorSetArray* dsa = new DescriptorSetArray(dsli);
     dsa->buildDescriptorSetLayout(ctx);
     ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa, 1);
 
-    SSBO* ssbo = new SSBO(); // Kept overflowing stack when testing, so moved to heap
+    SSBO* ssbo = new SSBO(); // Create large CPU-side buffer on the heap
 
+    // Copy to device
     VulkanBuffer* buf = ((descriptortypes::StorageBufferDescriptor*)dsa->singleDescriptorSets[0].instances[0])->storageBuffer;
     void* data = buf->chonklet.mapMemory(ctx, 0);
     memcpy(data, ssbo, sizeof(SSBO));
     buf->chonklet.unmapMemory(ctx);
 
+    // Create and configure compute pipeline
     std::vector<VkDescriptorSetLayout> dsl;
     dsl.push_back(dsa->descriptorSetLayout);
-
     ComputePipelineInfo pipelineInfo(dsl, "demos/headless_compute/single_compute");
     ComputePipeline* computePipeline = new ComputePipeline(ctx, pipelineInfo);
     
+    // Dispatch compute shader through transient compute queue
     VkCommandBuffer commandBuffer = beginSingleTimeCommands(ctx, ctx->commandPools.transientCompute);
     computePipeline->bind(commandBuffer);
     ComputePipeline::bindDescriptorSet(commandBuffer, computePipeline->getPipelineLayout(), dsa, 0, 0);
     vkCmdDispatch(commandBuffer, NUM_GROUPS, 1, 1);
-
     printf("Submitting compute dispatch...\n");
     lepton2_time_point start = startTiming();
-    // Waits for submitted queue to finish
+    // Utility function waits internally for submitted queue to finish
     endSingleTimeCommands(ctx, commandBuffer, ctx->queues.compute, ctx->commandPools.transientCompute);
-
     printf("Finished compute routine in %lg seconds.\n", getElapsedSeconds(start));
 
+    // Get data back from the device
     data = buf->chonklet.mapMemory(ctx, 0);
     memcpy(ssbo, data, sizeof(SSBO));
     buf->chonklet.unmapMemory(ctx);
 
+    // Print results
     printf("Prime numbers from %d-%d are as follows:\n", LOCAL_SIZE_X * (NUM_GROUPS - 16), LOCAL_SIZE_X * NUM_GROUPS);
     bool first_elem = true;
     for (int i = LOCAL_SIZE_X * (NUM_GROUPS - 16); i < LOCAL_SIZE_X * NUM_GROUPS; i++) {

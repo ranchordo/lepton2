@@ -52,6 +52,7 @@ int demo_simple_subpasses(int argc, char** argv) {
 
     ctx->swapchain.setPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR);  // Just for debugging to avoid limiting framerate
 
+    // Set up render pass structure
     TerminatingSubpassConfig termConfig = ctx->swapchain.getDefaultPresentConfig();
     RenderSubpass* node = new RenderSubpass(ctx, termConfig);
 
@@ -69,10 +70,6 @@ int demo_simple_subpasses(int argc, char** argv) {
 
     node->setupSubpassDescriptorSet(ctx, renderPass, {});  // To establish input attachment descriptors
 
-    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
-    store->addAllSubpasses(renderPass);
-    renderPass->addLinkedResource(store, true);
-
     // Main loop setup
     VulkanLoop mainLoop(renderPass->getResourceMultiplicity());
     VulkanLoopModifier* loopmod = new SimpleRenderPass(renderPass, ctx->swapchain.getSwapchainImages(), true);
@@ -81,13 +78,21 @@ int demo_simple_subpasses(int argc, char** argv) {
     mainLoop.addLinkedResource(renderPass, true);
     ctx->addLinkedResource(&mainLoop, false);
 
+    // Set up a graphical scene
     DeletableVulkanResourceTracker sceneContainer;
 
+    // Graphics submodule boilerplate
+    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
+    store->addAllSubpasses(renderPass);
+    renderPass->addLinkedResource(store, true);
+
+    // Initialize texture
     SamplerInfo defaultSamplerInfo = {};
     Texture* texture = new Texture(ctx, defaultSamplerInfo);
     texture->addTextureComponent(ctx, "demos/axion.png", VK_FORMAT_R8G8B8A8_SRGB);
     sceneContainer.addLinkedResource(texture, true);
 
+    // Behavior for single spinning square entity:
     class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
        public:
         void _create(VulkanContext* ctx, DeviceObjectData* objectData, float rotationSpeed, float zpos, Texture* texture) {
@@ -145,11 +150,13 @@ int demo_simple_subpasses(int argc, char** argv) {
         Texture* textureContainer;
     } rectangleEntity;
 
+    // Doing this outside rectangleEntity::_create because both squares share object data
     HostObjectData* hostData = new HostObjectData(vertices.data(), vertices.size() * sizeof(SimplePresetVertex), indices);
     DeviceObjectData* devData = new DeviceObjectData(ctx, hostData);
     hostData->destroy(ctx);
-    delete hostData;
+    delete hostData; // Geometry now only exists on device
 
+    // Create both rectangle entities (rectangleEntity, rectangleEntity1)
     sceneContainer.addLinkedResource(devData, true);
     rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
     rectangleEntity.initialize(ctx, renderPass, node1, store);
@@ -160,15 +167,18 @@ int demo_simple_subpasses(int argc, char** argv) {
     rectangleEntity1.initialize(ctx, renderPass, node1, store);
     sceneContainer.addLinkedResource(&rectangleEntity1, false);
 
+    // Screen for the second subpass
     StaticScreenEntity screenEntity(ctx, "demos/simple_subpasses/post_process");
     screenEntity.initialize(ctx, renderPass, node, store);
     sceneContainer.addLinkedResource(&screenEntity, false);
 
     mainLoop.addLinkedResource(&sceneContainer, false);
 
+    // Just to demonstrate the assembled descriptor structures in each subpass
     screenEntity.getConfigurationHandle().debugPrintAllBoundDescriptors();
     rectangleEntity.getConfigurationHandle().debugPrintAllBoundDescriptors();
 
+    // Loop!
     mainLoop.initialize(ctx);
     uint32_t frame_count = 0;
     while (!mainLoop.shouldLoopTerminate(ctx)) {

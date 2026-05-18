@@ -1,0 +1,37 @@
+#version 450
+
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+    uint maxdisp;
+    uint seed;
+} ubo;
+
+layout (set = 0, binding = 1, rgba16f) uniform image2D renderTarget;
+layout (set = 0, binding = 2, rgba8) uniform image2D swapchainOutput;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+uint pcg(uint v) {
+    uint state = v * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imsize = imageSize(renderTarget);
+    if (coord.x >= imsize.x || coord.y >= imsize.y) return;
+
+    uint seed = uint(coord.x) * 82736871 + uint(coord.y) * 3283907 + ubo.seed * 7383;
+    vec3 pixel = vec3(0);
+
+    for (int i = 0; i < 8; i++) {
+        int rnd = int(pcg(seed) % ubo.maxdisp - (ubo.maxdisp / 2));
+        ivec2 samp = clamp(coord + ivec2(rnd, 0), 0 * imsize, imsize - ivec2(1, 1));
+        pixel += imageLoad(renderTarget, samp).rgb;
+        seed++;
+    }
+
+    pixel /= 8.0;
+
+    imageStore(swapchainOutput, coord, vec4(pow(pixel, vec3(1 / 2.2)), 1));
+}

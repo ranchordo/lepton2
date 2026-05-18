@@ -39,6 +39,44 @@ class SimpleRenderPass : public VulkanLoopModifier {
     ImageArray* targetContainer;
     bool swapchainIndexing;
 };
+class ImageArraySwapchainRebuild : public VulkanLoopModifier {
+   public:
+    ImageArraySwapchainRebuild(RenderTargetImageCreationInfo rticInfo, ImageArray* array, VkExtent2D* extentPtr, uint32_t mult) {
+        this->rticInfo = rticInfo;
+        this->array = array;
+        this->extentPtr = extentPtr;
+        this->multiplicity = mult;
+    }
+    void onSwapchainRebuild(VulkanContext*) override;
+
+   private:
+    RenderTargetImageCreationInfo rticInfo;
+    ImageArray* array;
+    VkExtent2D* extentPtr;
+    uint32_t multiplicity;
+};
+class SimpleComputePass : public VulkanLoopModifier {
+   public:
+    SimpleComputePass(VulkanContext* ctx, const char* shaderName, ImageArray* inputContainer, ImageArray* outputContainer, VkExtent2D localSize,
+                      VkImageLayout outputLayout, std::vector<VkDescriptorSetLayout> otherDsls, DescriptorSetLayoutInfo initDsli);
+    virtual void preRender(VulkanContext* ctx, uint32_t frameIndex) override {};
+    void renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, uint32_t swapchainIndex) override;
+    void onSwapchainRebuild(VulkanContext* ctx) override;
+    virtual void destroy_back(VulkanContext* ctx) override {};
+
+   protected:
+    DescriptorSetArray* dsa1 = nullptr;  // For input multiplicity
+    DescriptorSetArray* dsa2 = nullptr;  // For output multiplicity (if applicable)
+    uint32_t setidx;
+
+   private:
+    ImageArray* inputContainer;
+    ImageArray* outputContainer;
+    ComputePipeline* computePipeline;
+    VkExtent2D localSize;
+    VkImageLayout outputLayout;
+    bool swapchainIndexing;
+};
 }  // namespace loopmodifiers
 
 class VulkanLoop : public DeletableVulkanResource {
@@ -49,6 +87,8 @@ class VulkanLoop : public DeletableVulkanResource {
     void process(VulkanContext* ctx);
     void terminateLoop(VulkanContext* ctx);
     void destroy_back(VulkanContext* ctx) override;
+
+    uint32_t getNumFramesInFlight() { return inFlightResources.size(); }
 
     std::vector<loopmodifiers::VulkanLoopModifier*> loopModifiers;
 

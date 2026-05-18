@@ -49,6 +49,105 @@ void SimpleRenderPass::onSwapchainRebuild(VulkanContext* ctx) {
     this->renderPass->generateFramebuffers(ctx, &targetContainer->images, targetContainer->extent);
 }
 
+void ImageArraySwapchainRebuild::onSwapchainRebuild(VulkanContext* ctx) {
+    for (uint32_t i = 0; i < array->images.size(); i++) {
+        array->images[i]->destroy(ctx);
+        delete array->images[i];
+    }
+
+    array->images.resize(multiplicity);
+    for (uint32_t i = 0; i < multiplicity; i++) {
+        array->images[i] = new VulkanImage();
+        createRenderTarget(ctx, *extentPtr, &rticInfo, array->images[i]);
+    }
+    array->extent = *extentPtr;
+}
+
+SimpleComputePass::SimpleComputePass(VulkanContext* ctx, const char* shaderName, ImageArray* inputContainer, ImageArray* outputContainer, VkExtent2D localSize,
+                                     VkImageLayout outputLayout, std::vector<VkDescriptorSetLayout> otherDsls, DescriptorSetLayoutInfo dsli1) {
+    this->localSize = localSize;
+    this->inputContainer = inputContainer;
+    this->outputContainer = outputContainer;
+    this->outputLayout = outputLayout;
+    this->swapchainIndexing = (inputContainer->images.size() != outputContainer->images.size());
+    this->setidx = otherDsls.size();
+
+    DescriptorSetLayoutInfo dsli2;
+    DescriptorInfo info;
+    info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    info.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.storageImageData.images = inputContainer;
+    dsli1.addNewBinding(info);
+    info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    info.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.storageImageData.images = outputContainer;
+    if (swapchainIndexing) {
+        dsli2.addNewBinding(info);
+    } else {
+        dsli1.addNewBinding(info);
+    }
+
+    this->dsa1 = new DescriptorSetArray(dsli1);
+    this->addLinkedResource(dsa1, true);
+    dsa1->buildDescriptorSetLayout(ctx);
+    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa1, inputContainer->images.size());
+
+    if (swapchainIndexing) {
+        this->dsa2 = new DescriptorSetArray(dsli2);
+        this->addLinkedResource(dsa2, true);
+        dsa2->buildDescriptorSetLayout(ctx);
+        ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa2, outputContainer->images.size());
+    }
+
+    std::vector<VkDescriptorSetLayout> dsl(otherDsls);
+    dsl.push_back(dsa1->descriptorSetLayout);
+    if (swapchainIndexing) dsl.push_back(dsa2->descriptorSetLayout);
+
+    ComputePipelineInfo pipelineInfo(dsl, shaderName);
+    computePipeline = new ComputePipeline(ctx, pipelineInfo);
+    this->addLinkedResource(computePipeline, true);
+}
+void SimpleComputePass::renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, uint32_t swapchainIndex) {
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.pNext = nullptr;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    const uint32_t outputImageIndex = swapchainIndexing ? swapchainIndex : frameIndex;
+    barrier.image = outputContainer->images[outputImageIndex]->image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
+    computePipeline->bind(buffer);
+    ComputePipeline::bindDescriptorSet(buffer, computePipeline->getPipelineLayout(), dsa1, frameIndex, setidx);
+    if (swapchainIndexing) {
+        ComputePipeline::bindDescriptorSet(buffer, computePipeline->getPipelineLayout(), dsa2, outputImageIndex, setidx + 1);
+    }
+    const uint32_t workX = (inputContainer->extent.width + localSize.width - 1) / localSize.width;
+    const uint32_t workY = (inputContainer->extent.height + localSize.height - 1) / localSize.height;
+    vkCmdDispatch(buffer, workX, workY, 1);
+    if (this->outputLayout != VK_IMAGE_LAYOUT_GENERAL) {
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.dstAccessMask = 0;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = this->outputLayout;
+        vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                             VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
+    }
+}
+void SimpleComputePass::onSwapchainRebuild(VulkanContext* ctx) {
+    dsa1->updateAllDescriptorSets(ctx);
+    if (dsa2 != nullptr) dsa2->updateAllDescriptorSets(ctx);
+}
+
 VulkanLoop::VulkanLoop(uint32_t inFlightFrames) {
     this->inFlightResources.resize(inFlightFrames);
 }

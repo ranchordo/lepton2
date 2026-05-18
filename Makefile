@@ -2,7 +2,7 @@
 
 # Base build procedure #
 
-BASECFLAGS = -std=c++17 -O3
+BASECFLAGS = -std=c++17 -O0
 BASELDFLAGS = -lglfw -lvulkan
 
 BASE_OUTPUT ?= lepton2_main

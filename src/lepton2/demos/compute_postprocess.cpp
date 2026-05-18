@@ -10,6 +10,7 @@
 #include "../vulkancore/VulkanUtils.h"
 
 using namespace lepton2::vulkancore;
+using namespace lepton2::vulkancore::descriptortypes;
 using namespace lepton2::vulkancore::loopmodifiers;
 using namespace lepton2::graphics::graphicalpresets;
 using namespace lepton2::graphics;
@@ -23,8 +24,9 @@ static std::vector<SimplePresetVertex> screenVertices = {
 
 static std::vector<uint32_t> screenIndices = {1, 0, 3, 1, 3, 2};
 
-struct SSBO {
-    int test_thing[64];
+struct UniformBufferObject {
+    uint maxdisp;
+    uint seed = 0;
 };
 
 int demo_compute_postprocess(int argc, char** argv) {
@@ -52,6 +54,8 @@ int demo_compute_postprocess(int argc, char** argv) {
     ctx->swapchain.setSurfaceFormat({VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR});
     ctx->swapchain.setUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
+    // Render pass structure:
+
     TerminatingSubpassConfig termConfig = RenderSubpass::getDefaultTerminatingConfig(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_GENERAL);
     RenderSubpass* node = new RenderSubpass(ctx, termConfig);
 
@@ -59,160 +63,114 @@ int demo_compute_postprocess(int argc, char** argv) {
     renderPass->addLinkedResource(node, true);
     ctx->swapchain.buildSwapchain(ctx);
 
-    ImageArray* renderContainer = new ImageArray();
-    renderPass->addLinkedResource(renderContainer, true);
+    ImageArray* renderContainer1 = new ImageArray();  // To store render output
+    ImageArray* renderContainer2 = new ImageArray();  // To store x-blurred step
+    renderPass->addLinkedResource(renderContainer1, true);
+    renderPass->addLinkedResource(renderContainer2, true);
 
-    VkExtent2D targetExtent = ctx->swapchain.getKnownExtent();
-    RenderTargetImageCreationInfo rticInfo = defaultColorAttachmentRTIC(termConfig.attachmentDescription.format);
-    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-
-    renderContainer->images.resize(renderPass->getResourceMultiplicity());
-    for (uint32_t i = 0; i < renderPass->getResourceMultiplicity(); i++) {
-        renderContainer->images[i] = new VulkanImage();
-        createRenderTarget(ctx, targetExtent, &rticInfo, renderContainer->images[i]);
-    }
-    renderContainer->extent = targetExtent;
-
-    renderPass->generateFramebuffers(ctx, &renderContainer->images, targetExtent);
-
-    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
-    store->addAllSubpasses(renderPass);
-    renderPass->addLinkedResource(store, true);
+    // Main loop setup:
 
     VulkanLoop mainLoop(renderPass->getResourceMultiplicity());
 
-    class : public VulkanLoopModifier {
-       public:
-        void _create(RenderTargetImageCreationInfo rticInfo, ImageArray* renderContainer, VkExtent2D* extent, uint32_t multiplicity) {
-            this->rticInfo = rticInfo;
-            this->renderContainer = renderContainer;
-            this->extent = extent;
-            this->multiplicity = multiplicity;
-        }
-        void onSwapchainRebuild(VulkanContext* ctx) override {
-            for (uint32_t i = 0; i < renderContainer->images.size(); i++) {
-                renderContainer->images[i]->destroy(ctx);
-                delete renderContainer->images[i];
-            }
-            
-            renderContainer->images.resize(multiplicity);
-            for (uint32_t i = 0; i < multiplicity; i++) {
-                renderContainer->images[i] = new VulkanImage();
-                createRenderTarget(ctx, *extent, &rticInfo, renderContainer->images[i]);
-            }
-            renderContainer->extent = *extent;
-        }
+    // Loop modifiers to handle rendering and re-creation of render targets:
+    RenderTargetImageCreationInfo rticInfo = defaultColorAttachmentRTIC(termConfig.attachmentDescription.format);
+    rticInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+    ImageArraySwapchainRebuild targetRebuildLoopmod1(rticInfo, renderContainer1, &ctx->swapchain.getSwapchainImages()->extent,
+                                                     renderPass->getResourceMultiplicity());
+    mainLoop.loopModifiers.push_back(&targetRebuildLoopmod1);
 
-       private:
-        RenderTargetImageCreationInfo rticInfo;
-        ImageArray* renderContainer;
-        VkExtent2D* extent;
-        uint32_t multiplicity;
-    } targetRebuildLoopmod;
+    ImageArraySwapchainRebuild targetRebuildLoopmod2(rticInfo, renderContainer2, &ctx->swapchain.getSwapchainImages()->extent,
+                                                     renderPass->getResourceMultiplicity());
+    mainLoop.loopModifiers.push_back(&targetRebuildLoopmod2);
 
-    SimpleRenderPass renderPassLoopmod(renderPass, renderContainer, false);
-
-    class : public VulkanLoopModifier {
-       public:
-        void _create(VulkanContext* ctx, ImageArray* inputContainer, VkExtent2D extent, VkExtent2D localSize) {
-            this->extent = extent;
-            this->localSize = localSize;
-            this->inputContainer = inputContainer;
-            this->swapchainContainer = ctx->swapchain.getSwapchainImages();
-
-            DescriptorSetLayoutInfo dsli1;
-            DescriptorSetLayoutInfo dsli2;
-            {
-                DescriptorInfo info;
-                info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-                info.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
-                info.storageImageData.images = inputContainer;
-                dsli1.addNewBinding(info);
-            }
-            {
-                DescriptorInfo info;
-                info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-                info.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
-                info.storageImageData.images = swapchainContainer;
-                dsli2.addNewBinding(info);
-            }
-
-            this->dsa1 = new DescriptorSetArray(dsli1);
-            this->addLinkedResource(dsa1, true);
-            dsa1->buildDescriptorSetLayout(ctx);
-            ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa1, inputContainer->images.size());
-
-            this->dsa2 = new DescriptorSetArray(dsli2);
-            this->addLinkedResource(dsa2, true);
-            dsa2->buildDescriptorSetLayout(ctx);
-            ctx->descriptorPoolManager.allocateDescriptorSets(ctx, dsa2, swapchainContainer->images.size());
-
-            std::vector<VkDescriptorSetLayout> dsl;
-            dsl.push_back(dsa1->descriptorSetLayout);
-            dsl.push_back(dsa2->descriptorSetLayout);
-
-            ComputePipelineInfo pipelineInfo(dsl, "demos/compute_postprocess/postprocess");
-            computePipeline = new ComputePipeline(ctx, pipelineInfo);
-            this->addLinkedResource(computePipeline, true);
-        }
-
-        void renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, uint32_t swapchainIndex) override {
-            VkImageMemoryBarrier barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.pNext = nullptr;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image = swapchainContainer->images[swapchainIndex]->image;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-            vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
-            computePipeline->bind(buffer);
-            ComputePipeline::bindDescriptorSet(buffer, computePipeline->getPipelineLayout(), dsa1, frameIndex, 0);
-            ComputePipeline::bindDescriptorSet(buffer, computePipeline->getPipelineLayout(), dsa2, swapchainIndex, 1);
-            uint32_t workX = (inputContainer->extent.width + localSize.width - 1) / localSize.width;
-            uint32_t workY = (inputContainer->extent.height + localSize.height - 1) / localSize.height;
-            vkCmdDispatch(buffer, workX, workY, 1);
-            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier.dstAccessMask = 0;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
-        }
-
-        void onSwapchainRebuild(VulkanContext* ctx) override {
-            dsa1->updateAllDescriptorSets(ctx);
-            dsa2->updateAllDescriptorSets(ctx);
-        }
-
-       private:
-        ImageArray* inputContainer;
-        ImageArray* swapchainContainer;
-        DescriptorSetArray* dsa1; // For default resource multiplicity
-        DescriptorSetArray* dsa2; // For swapchain multiplicity
-        ComputePipeline* computePipeline;
-        VkExtent2D extent;
-        VkExtent2D localSize;
-    } postprocessLoopmod;
-
-    targetRebuildLoopmod._create(rticInfo, renderContainer, &ctx->swapchain.getSwapchainImages()->extent, renderPass->getResourceMultiplicity());
-    postprocessLoopmod._create(ctx, renderContainer, targetExtent, {16, 16});
-    mainLoop.loopModifiers.push_back(&targetRebuildLoopmod);
+    SimpleRenderPass renderPassLoopmod(renderPass, renderContainer1, false);
     mainLoop.loopModifiers.push_back(&renderPassLoopmod);
-    mainLoop.loopModifiers.push_back(&postprocessLoopmod);
-    mainLoop.addLinkedResource(&targetRebuildLoopmod, false);
+
+    targetRebuildLoopmod1.onSwapchainRebuild(ctx);  // Shortcuts for framebuffer init
+    targetRebuildLoopmod2.onSwapchainRebuild(ctx);
+    renderPassLoopmod.onSwapchainRebuild(ctx);
+
+    // Compute pass with a uniform buffer:
+    class ModifiedComputePass : public SimpleComputePass {
+       public:
+        ModifiedComputePass(VulkanContext* ctx, const char* name, ImageArray* in, ImageArray* out, VkImageLayout layout, UniformBufferObject* ubo)
+            : SimpleComputePass(ctx, name, in, out, {16, 16}, layout, {}, getInitialLayoutInfo()) {
+            this->ubo = ubo;
+        }
+
+        DescriptorSetLayoutInfo getInitialLayoutInfo() {
+            DescriptorSetLayoutInfo dsli;
+            DescriptorInfo descInfo;
+            descInfo.uniformBufferData.bufferSize = sizeof(UniformBufferObject);
+            descInfo.uniformBufferData.createNewBuffer = true;
+            descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descInfo.shaderStages = VK_SHADER_STAGE_COMPUTE_BIT;
+            dsli.addNewBinding(descInfo);
+            return dsli;
+        }
+        void preRender(VulkanContext* ctx, uint32_t frameIndex) override {
+            VulkanBuffer* buf = ((UniformBufferDescriptor*)(dsa1->singleDescriptorSets[frameIndex].instances[0]))->uniformBuffer;
+            void* data = buf->chonklet.mapMemory(ctx, 0);
+            memcpy(data, ubo, sizeof(UniformBufferObject));
+            buf->chonklet.unmapMemory(ctx);
+        }
+
+       private:
+        UniformBufferObject* ubo; // Both passes will share the same UniformBufferObject
+    };
+
+    // Make the values in the UBO dance CPU-side with another loop modifier:
+    UniformBufferObject ubo;
+    class : public VulkanLoopModifier {
+       public:
+        void _create(UniformBufferObject* ubo, VkExtent2D* windowSize) {
+            this->ubo = ubo;
+            ubo->seed = 0;
+            this->start = startTiming();
+            this->windowSize = windowSize;
+        }
+        void preRender(VulkanContext* ctx, uint32_t frameIndex) override {
+            float disp_multiplier = (2.f + cosf(2.f * M_PI * getElapsedSeconds(start))) / 3.f;
+            ubo->maxdisp = 2 * (uint)(0.1f * windowSize->height * disp_multiplier);
+            ubo->seed++;
+        }
+
+       private:
+        UniformBufferObject* ubo;
+        lepton2_time_point start;
+        VkExtent2D* windowSize;
+    } dynamicsLoopmod;
+
+    // Add boring CPU-side dynamics modifier:
+    dynamicsLoopmod._create(&ubo, &ctx->swapchain.getSwapchainImages()->extent);
+    mainLoop.loopModifiers.push_back(&dynamicsLoopmod);
+
+    // X-blurring pass from renderContainer1->images to renderContainer2->images
+    ModifiedComputePass postprocessLoopmod1(ctx, "demos/compute_postprocess/blur_x", renderContainer1,
+                                            renderContainer2, VK_IMAGE_LAYOUT_GENERAL, &ubo);
+    mainLoop.loopModifiers.push_back(&postprocessLoopmod1);
+    
+    // Y-blurring pass from renderContainer2->images directly to swapchain
+    ModifiedComputePass postprocessLoopmod2(ctx, "demos/compute_postprocess/blur_y", renderContainer2,
+                                            ctx->swapchain.getSwapchainImages(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, &ubo);
+    mainLoop.loopModifiers.push_back(&postprocessLoopmod2);
+
+    // Mainly unnecessary, as these do not override destroy_back(VulkanContext*), but good practice:
+    mainLoop.addLinkedResource(&targetRebuildLoopmod1, false);
+    mainLoop.addLinkedResource(&targetRebuildLoopmod2, false);
     mainLoop.addLinkedResource(&renderPassLoopmod, false);
-    mainLoop.addLinkedResource(&postprocessLoopmod, false);
+    mainLoop.addLinkedResource(&dynamicsLoopmod, false);
+    mainLoop.addLinkedResource(&postprocessLoopmod1, false);
+    mainLoop.addLinkedResource(&postprocessLoopmod2, false);
     mainLoop.addLinkedResource(renderPass, true);
+
+    // Ok, this one is necessary:
     ctx->addLinkedResource(&mainLoop, false);
+
+    // Normal graphics submodule initialization:
+    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
+    store->addAllSubpasses(renderPass);
+    renderPass->addLinkedResource(store, true);
 
     class : public GraphicalEntity {
        public:
@@ -249,6 +207,7 @@ int demo_compute_postprocess(int argc, char** argv) {
 
     mainLoop.addLinkedResource(&screen, false);
 
+    // Loop!
     mainLoop.initialize(ctx);
     uint32_t frame_count = 0;
     while (!mainLoop.shouldLoopTerminate(ctx)) {
