@@ -11,6 +11,10 @@ DescriptorType* DescriptorType::constructDescriptorInstance(VulkanContext* ctx, 
     switch (info.descriptorType) {
         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
             return new UniformBufferDescriptor(ctx, info, index);
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            return new StorageBufferDescriptor(ctx, info, index);
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            return new StorageImageDescriptor(ctx, info, index);
         case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
             return new ImageSamplerDescriptor(ctx, info, index);
         case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
@@ -29,6 +33,7 @@ UniformBufferDescriptor::UniformBufferDescriptor(VulkanContext* ctx, DescriptorI
         this->uniformBufferSize = info.uniformBufferData.bufferSize;
     } else {
         this->uniformBuffer = info.uniformBufferData.bufferReference;
+        this->uniformBufferSize = info.uniformBufferData.bufferSize;
     }
 }
 
@@ -54,6 +59,64 @@ void UniformBufferDescriptor::destroy_back(VulkanContext* ctx) {
     delete this->uniformBuffer;
 }
 
+StorageBufferDescriptor::StorageBufferDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
+    if (info.storageBufferData.createNewBuffer) {
+        VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        this->storageBuffer = new VulkanBuffer();
+        createBuffer(ctx, info.storageBufferData.bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, properties, this->storageBuffer);
+        this->storageBufferSize = info.storageBufferData.bufferSize;
+    } else {
+        this->storageBuffer = info.storageBufferData.bufferReference;
+        this->storageBufferSize = info.storageBufferData.bufferSize;
+    }
+}
+
+DescriptorWriteInfoContainer StorageBufferDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
+    DescriptorWriteInfoContainer ret{};
+    ret.bufferInfo.buffer = storageBuffer != nullptr ? storageBuffer->buffer : nullptr;
+    ret.bufferInfo.offset = 0;
+    ret.bufferInfo.range = storageBuffer != nullptr ? this->storageBufferSize : 0;
+
+    ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    ret.writeInfo.dstSet = dstSet;
+    ret.writeInfo.dstBinding = dstBinding;
+    ret.writeInfo.dstArrayElement = 0;
+    ret.writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    ret.writeInfo.descriptorCount = 1;
+    ret.writeInfo.pNext = nullptr;
+
+    return ret;
+}
+
+void StorageBufferDescriptor::destroy_back(VulkanContext* ctx) {
+    if (this->storageBuffer != nullptr) this->storageBuffer->destroy(ctx);
+    delete this->storageBuffer;
+}
+
+StorageImageDescriptor::StorageImageDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
+    this->images = info.storageImageData.images;
+    this->index = index;
+}
+
+DescriptorWriteInfoContainer StorageImageDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
+    DescriptorWriteInfoContainer ret{};
+    ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VulkanImage* target = nullptr;
+    target = this->images->images[this->index];
+    
+    ret.imageInfo.imageView = target->imageView;
+
+    ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    ret.writeInfo.dstSet = dstSet;
+    ret.writeInfo.dstBinding = dstBinding;
+    ret.writeInfo.dstArrayElement = 0;
+    ret.writeInfo.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    ret.writeInfo.descriptorCount = 1;
+    ret.writeInfo.pNext = nullptr;
+
+    return ret;
+}
+
 ImageSamplerDescriptor::ImageSamplerDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
     this->imageIndex = index;
     this->componentIndex = info.imageSamplerData.componentIndex;
@@ -64,19 +127,8 @@ DescriptorWriteInfoContainer ImageSamplerDescriptor::getWriteInfo(VulkanContext*
     DescriptorWriteInfoContainer ret;
     ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     VulkanImage* target = nullptr;
-    if (this->container->components[this->componentIndex]->useSwapChainIndexing) {
-        target = this->container->components[this->componentIndex]->swapChainIndexedImages[this->imageIndex];
-        if (this->updateInfo == nullptr) {
-            this->updateInfo = new DescriptorSetUpdateInfo();
-            this->updateInfo->alive = true;
-            this->updateInfo->instance = this;
-            this->updateInfo->dstSet = dstSet;
-            this->updateInfo->dstBinding = dstBinding;
-            ctx->swapChain.descriptorUpdates.insert(this->updateInfo);
-        }
-    } else {
-        target = this->container->components[this->componentIndex]->textureImage;
-    }
+    target = this->container->components[this->componentIndex]->image;
+
     ret.imageInfo.imageView = target->imageView;
     ret.imageInfo.sampler = this->container->textureSampler;
 
@@ -91,33 +143,27 @@ DescriptorWriteInfoContainer ImageSamplerDescriptor::getWriteInfo(VulkanContext*
     return ret;
 }
 
-void ImageSamplerDescriptor::destroy_back(VulkanContext* ctx) {
-    if (this->updateInfo != nullptr) {
-        this->updateInfo->alive = false;
-    }
-    // UpdateInfo will be cleaned by the swapChain on a recreation or deletion.
-}
-
 InputAttachmentDescriptor::InputAttachmentDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index) {
     this->colorAttachmentInfo = info.inputAttachmentData.colorAttachmentInfo;
+    this->depthAttachmentInfo = info.inputAttachmentData.depthAttachmentInfo;
     this->arrayIndex = index;
 }
 
 DescriptorWriteInfoContainer InputAttachmentDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
-    if (this->updateInfo == nullptr) {
-        this->updateInfo = new DescriptorSetUpdateInfo();
-        this->updateInfo->alive = true;
-        this->updateInfo->instance = this;
-        this->updateInfo->dstSet = dstSet;
-        this->updateInfo->dstBinding = dstBinding;
-        ctx->swapChain.descriptorUpdates.insert(this->updateInfo);
-    }
     DescriptorWriteInfoContainer ret;
-    ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    if (this->colorAttachmentInfo->swapChainCreations.size() <= this->arrayIndex) {
-        throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting render target. Is colorAttachmentInfo correct?");
+    if (this->colorAttachmentInfo != nullptr) {
+        if (this->colorAttachmentInfo->renderTargets.size() <= this->arrayIndex) {
+            throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting color target. Is colorAttachmentInfo correct?");
+        }
+        ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        ret.imageInfo.imageView = this->colorAttachmentInfo->renderTargets[this->arrayIndex]->imageView;
+    } else if (this->depthAttachmentInfo != nullptr) {
+        if (this->depthAttachmentInfo->depthTargetImages.size() <= this->arrayIndex) {
+            throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting depth target. Is depthAttachmentInfo correct?");
+        }
+        ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        ret.imageInfo.imageView = this->depthAttachmentInfo->depthTargetImages[this->arrayIndex]->imageView;
     }
-    ret.imageInfo.imageView = this->colorAttachmentInfo->swapChainCreations[this->arrayIndex]->imageView;
 
     ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     ret.writeInfo.dstSet = dstSet;
@@ -130,13 +176,10 @@ DescriptorWriteInfoContainer InputAttachmentDescriptor::getWriteInfo(VulkanConte
     return ret;
 }
 
-void InputAttachmentDescriptor::destroy_back(VulkanContext* ctx) {
-    this->updateInfo->alive = false;
-    // UpdateInfo will be cleaned by the swapChain on a recreation or deletion.
-}
-
 const std::vector<DescriptorPoolSizeTracker> defaultSizes = {
     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256, 0},
+    {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256, 0},
+    {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 256, 0},
     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256, 0},
     {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 256, 0}};
 
@@ -156,6 +199,7 @@ DescriptorPool::DescriptorPool(VulkanContext* ctx, std::vector<DescriptorPoolSiz
     this->usedSets = 0;
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.pNext = nullptr;
     poolInfo.poolSizeCount = sizeInfos.size();
     poolInfo.pPoolSizes = sizeInfos.data();
     poolInfo.maxSets = totalSets;
@@ -189,6 +233,7 @@ bool DescriptorPool::allocateDescriptorSets(VulkanContext* ctx, DescriptorSetArr
     std::vector<VkDescriptorSetLayout> layouts(quantity, dsa->descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.pNext = nullptr;
     allocInfo.descriptorPool = descriptorPool;
     allocInfo.descriptorSetCount = quantity;
     allocInfo.pSetLayouts = layouts.data();
@@ -276,6 +321,7 @@ bool DescriptorSetArray::isLayoutCompatible(std::vector<VkDescriptorSetLayoutBin
 void DescriptorSetArray::buildDescriptorSetLayout(VulkanContext* ctx) {
     VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
     layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutCreateInfo.pNext = nullptr;
     layoutCreateInfo.bindingCount = this->layoutInfo.bindings.size();
     layoutCreateInfo.pBindings = this->layoutInfo.bindings.data();
 
@@ -317,13 +363,12 @@ void DescriptorSetArray::destroy_back(VulkanContext* ctx) {
             }
             sds.instances.clear();
         }
-        this->singleDescriptorSets.clear();
-        vkFreeDescriptorSets(ctx->device, parent->descriptorPool, descriptorSets.size(), descriptorSets.data());
         // Keep tallies
         parent->usedSets -= this->singleDescriptorSets.size();
         for (auto const& pair : this->layoutInfo.typeCounts) {
             parent->sizeMap[pair.first].used -= (this->singleDescriptorSets.size() * pair.second);
         }
+        vkFreeDescriptorSets(ctx->device, parent->descriptorPool, descriptorSets.size(), descriptorSets.data());
     }
     this->singleDescriptorSets.clear();
 }

@@ -1,180 +1,45 @@
-#include "lepton2/graphics/GraphicalPresets.h"
-#include "lepton2/vulkancore/ObjectData.h"
-#include "lepton2/vulkancore/Pipelines.h"
-#include "lepton2/vulkancore/RenderPass.h"
-#include "lepton2/vulkancore/Textures.h"
-#include "lepton2/vulkancore/VulkanContext.h"
-#include "lepton2/vulkancore/VulkanLoop.h"
-#include "lepton2/vulkancore/VulkanMemory.h"
-#include "lepton2/vulkancore/VulkanUtils.h"
-#include "lepton2/utils/LeptonUtils.h"
+#include <string.h>
+#include <stdio.h>
 
-using namespace lepton2::vulkancore;
-using namespace lepton2::graphics::graphicalpresets;
-using namespace lepton2::graphics;
-using namespace lepton2::utils;
+extern int demo_simple_subpasses(int argc, char** argv);
+extern int demo_compute_postprocess(int argc, char** argv);
+extern int demo_headless_compute(int argc, char** argv);
 
-VulkanContext* ctx;
+int run_single_demo(int (*fptr)(int, char**), const char* name, const char* testname,
+                    int mode, int argc, char** argv) {
+    if (mode == 0) {
+        if (strcmp(name, testname) != 0) return -1;
+        printf("Launching demo '%s'...\n\n", testname);
+        int ret = fptr(argc, argv);
+        printf("Demo '%s' finished with exit code %d.\n", testname, ret);
+        return 0;
+    } else if (mode == 1) {
+        printf("  %s\n", testname);
+        return -1;
+    }
+    return 0;
+}
 
-std::vector<SimplePresetVertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f}},
-    {{+0.5f, -0.5f, 0.0f}, {1.0f, 1.0f}},
-    {{+0.5f, +0.5f, 0.0f}, {1.0f, 0.0f}},
-    {{-0.5f, +0.5f, 0.0f}, {0.0f, 0.0f}}};
+#define DO_DEMO(demo_name) if (run_single_demo(demo_name, name, #demo_name, mode, argc, argv) >= 0) return 0;
 
-std::vector<uint32_t> indices = {3, 0, 1, 2, 3, 1};
-
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
+int run_demos(const char* name, int mode, int argc, char** argv) {
+    DO_DEMO(demo_simple_subpasses);
+    DO_DEMO(demo_compute_postprocess);
+    DO_DEMO(demo_headless_compute);
+    return -1;
+}
 
 int main(int argc, char** argv) {
-#ifdef DEBUG_ENV
-#pragma message "Building in debug mode."
-    printf("Launching main in test mode...\n\n");
-#endif
-    if (!glfwInit()) {
-        throw std::runtime_error("Failed GLFW initialization.");
+    printf("\n===== Lepton2 demo launcher =====\n");
+    if (argc < 2) {
+        printf("Not enough input arguments. The following demos are available:\n");
+        run_demos("", 1, argc, argv);
+    } else {
+        int ret = run_demos(argv[1], 0, argc, argv);
+        if (ret < 0) {
+            printf("Unrecognized demo '%s'. The following demos are available:\n", argv[1]);
+            run_demos("", 1, argc, argv);
+        }
     }
-    glfwDefaultWindowHints();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Lepton2 test", nullptr, nullptr);
-    VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Lepton2 test";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "lepton2";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_0;
-#ifdef DEBUG_ENV
-    ctx = new VulkanContext(argv[0], true, true, appInfo, window);
-#else
-    ctx = new VulkanContext(argv[0], false, false, appInfo, window);
-#endif
-
-    RenderGraph renderGraph;
-    RenderGraphNode* node = renderGraph.buildPresentingNode(ctx);
-
-    RenderGraphNode* node1 = renderGraph.buildNewNode();
-    node1->addColorAttachment(defaultColorAttachmentRTIC(VK_FORMAT_R16G16B16A16_SFLOAT), true);
-    node->connectFromNode(node1, 0, 0);
-
-    RenderPass* renderState = renderGraph.buildRenderState(ctx);
-    renderState->addLinkedResource(node, true);
-    renderState->addLinkedResource(node1, true);
-    renderState->addLinkedResource(&renderGraph, false);
-    ctx->swapChain.buildSwapChain(ctx, renderState);
-
-    GraphicalConfigurationStore* store = new GraphicalConfigurationStore();
-    store->addAllSubpasses(renderState);
-    renderState->addLinkedResource(store, true);
-
-    VulkanLoop mainLoop(renderState, 2);
-
-    DeletableVulkanResourceTracker sceneContainer;
-
-    SamplerInfo defaultSamplerInfo = {};
-    Texture* texture = new Texture(ctx, defaultSamplerInfo);
-    texture->addTextureComponent(ctx, "default/axion.png");
-    sceneContainer.addLinkedResource(texture, true);
-
-    class : public GraphicalEntity {  // Hehe anonymous classes go brrrrr
-       public:
-        void _create(VulkanContext* ctx, DeviceObjectData* objectData, float rotationSpeed, float zpos, Texture* texture) {
-            this->setObjectData(objectData);
-            this->rotationSpeed = rotationSpeed;
-            this->textureContainer = texture;
-            this->zpos = zpos;
-        }
-        PipelineConstraints getPipelineRequirements() override {
-            DescriptorSetLayoutInfo dsli;
-            {
-                DescriptorInfo descInfo;
-                descInfo.uniformBufferData.bufferSize = sizeof(UniformBufferObject);
-                descInfo.uniformBufferData.createNewBuffer = true;
-                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                descInfo.shaderStages = VK_SHADER_STAGE_VERTEX_BIT;
-                dsli.addNewBinding(descInfo, 1);
-            }
-            {
-                DescriptorInfo descInfo;
-                descInfo.imageSamplerData.container = this->textureContainer;
-                descInfo.imageSamplerData.componentIndex = 0;
-                descInfo.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
-                dsli.addNewBinding(descInfo, 1);
-            }
-            PipelineConstraints req("default/simple_axion", dsli, simplePresetVsd);
-            return req;
-        }
-        void postInit(VulkanContext* ctx, RenderPass* pass, RenderGraphNode* node) override {
-            this->start_time_point = startTiming();
-        }
-        void preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t scfi) override {
-            UniformBufferObject ubo{};
-            float elapsedSeconds = (float)getElapsedSeconds(start_time_point);
-            ubo.model = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, zpos + sin(elapsedSeconds * 4 * this->rotationSpeed) * 0.1));
-            ubo.model = glm::rotate(ubo.model, elapsedSeconds * this->rotationSpeed, glm::vec3(0, 0, 1));
-            ubo.view = glm::lookAt(glm::vec3(1, 1, 0.5), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
-            ubo.proj = glm::perspective(glm::radians(45.0f), ctx->swapChain.swapChainExtent.width / (float)ctx->swapChain.swapChainExtent.height, 0.1f, 10.0f);
-            ubo.proj[1][1] *= -1;
-            VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(sds->instances[0]))->uniformBuffer;
-            void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
-            memcpy(data, &ubo, sizeof(UniformBufferObject));
-            uniformBuffer->chonklet.unmapMemory(ctx);
-        }
-        void destroy_back(VulkanContext* ctx) override {
-            this->destroyEntityResources(ctx);
-        }
-
-       private:
-        lepton2_time_point start_time_point;
-        float rotationSpeed;
-        float zpos;
-        Texture* textureContainer;
-    } rectangleEntity;
-
-    HostObjectData* hostData = new HostObjectData(vertices.data(), vertices.size() * sizeof(SimplePresetVertex), indices);
-    DeviceObjectData* devData = new DeviceObjectData(ctx, hostData);
-    hostData->destroy(ctx);
-    delete hostData;
-
-    sceneContainer.addLinkedResource(devData, true);
-    rectangleEntity._create(ctx, devData, glm::radians(90.0f), 0.2f, texture);
-    rectangleEntity.initialize(ctx, renderState, node1, store);
-    sceneContainer.addLinkedResource(&rectangleEntity, false);
-
-    decltype(rectangleEntity) rectangleEntity1;
-    rectangleEntity1._create(ctx, devData, glm::radians(-90.0f), -0.2f, texture);
-    rectangleEntity1.initialize(ctx, renderState, node1, store);
-    sceneContainer.addLinkedResource(&rectangleEntity1, false);
-
-    StaticScreenEntity screenEntity(ctx, "default/post_process", {&node1->getColorAttachments()->at(0)});
-    screenEntity.initialize(ctx, renderState, node, store);
-    sceneContainer.addLinkedResource(&screenEntity, false);
-
-    mainLoop.addLinkedResource(&sceneContainer, false);
-
-    mainLoop.initialize(ctx);
-    uint32_t frame_count = 0;
-    while (!mainLoop.shouldLoopTerminate(ctx)) {
-        auto time_point = startTiming();
-        mainLoop.process(ctx);
-        if (frame_count % 1000 == 0) {
-            double fp = getElapsedSeconds(time_point);
-            printf("Interval (μs): %lf\n", fp * 1000000);
-            printf("Framerate (fps): %lf\n", 1 / fp);
-        }
-        frame_count++;
-    }
-    mainLoop.terminateLoop(ctx);
-
-    mainLoop.destroy(ctx);
-    renderState->destroy(ctx);
-    delete renderState;
-    ctx->destroy(ctx);
-    delete ctx;
     return 0;
 }

@@ -7,10 +7,10 @@ BASELDFLAGS = -lglfw -lvulkan
 
 BASE_OUTPUT ?= lepton2_main
 
-SOURCES = $(wildcard src/*.cpp) $(wildcard src/*/*.cpp) $(wildcard src/*/*/*.cpp)
+SOURCES = $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
 
-SHADER_SOURCES = $(wildcard shaders_src/*.frag) $(wildcard shaders_src/*.vert) $(wildcard shaders_src/*/*.frag) $(wildcard shaders_src/*/*.vert)
+SHADER_SOURCES = $(wildcard shaders_src/*.comp shaders_src/*/*.comp shaders_src/*/*/*.comp shaders_src/*.frag shaders_src/*/*.frag shaders_src/*/*/*.frag shaders_src/*.vert shaders_src/*/*.vert shaders_src/*/*/*.vert)
 SHADER_SPIRV = $(subst shaders_src,build/output/shaders,$(addsuffix .spv,$(SHADER_SOURCES)))
 
 build-base: $(OBJECTS)
@@ -56,7 +56,7 @@ test: LDFLAGS = $(BASELDFLAGS)
 test: OUTPUT = build/output/$(BASE_OUTPUT)
 test: build-base assets
 	@echo Launching $(OUTPUT)...
-	@./$(OUTPUT)
+	@./$(OUTPUT) $(TESTARGS)
 
 # Mac OSX build #
 # FIXME: Only works on arm64-based cpu for now, need to update sysroot and unify binaries.

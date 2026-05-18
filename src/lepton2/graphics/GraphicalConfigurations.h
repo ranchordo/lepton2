@@ -10,21 +10,33 @@ namespace lepton2::graphics {
 namespace vkc = lepton2::vulkancore;
 
 class GraphicalEntity;
-struct GraphicalConfiguration : public vkc::DeletableVulkanResource {
-    std::vector<GraphicalEntity*> users;
-    vkc::GraphicsPipeline* pipeline = nullptr;
-    vkc::DescriptorSetArray* layoutReference = nullptr;
-
-    void renderAllUsers(VkCommandBuffer commandBuffer, uint32_t scfi, uint32_t setidx);
-    void preRenderAllUsers(vkc::VulkanContext* ctx, uint32_t scfi);
-    void destroy_back(vkc::VulkanContext* ctx) override;
-};
-
 class SubpassGraphicalConfigurationStore;
+class GraphicalConfiguration;
+
 struct GraphicalConfigurationHandle {
     GraphicalConfiguration* config;
     GraphicalEntity* user;
     SubpassGraphicalConfigurationStore* store;
+
+    void debugPrintAllBoundDescriptors();
+};
+
+class GraphicalConfiguration : public vkc::DeletableVulkanResource {
+   public:
+    void renderAllUsers(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
+    void preRenderAllUsers(vkc::VulkanContext* ctx, uint32_t frameIndex);
+    void destroy_back(vkc::VulkanContext* ctx) override;
+
+    vkc::DescriptorSetArray* getLayoutReference() { return this->layoutReference; }
+    vkc::GraphicsPipeline* getPipeline() { return this->pipeline; }
+
+   private:
+    std::vector<GraphicalEntity*> users;
+    vkc::GraphicsPipeline* pipeline = nullptr;
+    vkc::DescriptorSetArray* layoutReference = nullptr;
+
+    friend class SubpassGraphicalConfigurationStore;
+    friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };
 
 class SubpassGCSRenderCallback : public vkc::SubpassRenderCallback {
@@ -32,8 +44,8 @@ class SubpassGCSRenderCallback : public vkc::SubpassRenderCallback {
     SubpassGCSRenderCallback(SubpassGraphicalConfigurationStore* store) {
         this->store = store;
     }
-    void renderSubpassCmd(VkCommandBuffer commandBuffer, vkc::RenderPass* pass, uint32_t scfi, uint32_t setidx) override;
-    void preRenderSubpass(vkc::VulkanContext* ctx, uint32_t scfi) override;
+    void renderSubpassCmd(VkCommandBuffer commandBuffer, vkc::RenderPass* pass, uint32_t frameIndex, uint32_t setidx) override;
+    void preRenderSubpass(vkc::VulkanContext* ctx, uint32_t frameIndex) override;
 
    private:
     SubpassGraphicalConfigurationStore* store;
@@ -41,24 +53,27 @@ class SubpassGCSRenderCallback : public vkc::SubpassRenderCallback {
 
 class SubpassGraphicalConfigurationStore : public vkc::DeletableVulkanResource {
    public:
-    SubpassGraphicalConfigurationStore(vkc::RenderGraphNode* node) : renderCallback(this) {
+    SubpassGraphicalConfigurationStore(vkc::RenderSubpass* node, vkc::RenderPass* renderPass) : renderCallback(this) {
         this->parent = node;
+        this->renderPass = renderPass;
     }
-    GraphicalConfigurationHandle getConfiguration(vkc::VulkanContext* ctx, vkc::RenderPass* renderState,
-                                                  vkc::PipelineConstraints constraints, GraphicalEntity* user);
+    GraphicalConfigurationHandle getConfiguration(vkc::VulkanContext* ctx, vkc::GraphicsPipelineConstraints constraints, GraphicalEntity* user);
     void dropConfigurationHandle(vkc::VulkanContext* ctx, GraphicalConfigurationHandle configuration);
-    void renderAllConfigurations(VkCommandBuffer commandBuffer, uint32_t scfi, uint32_t setidx);
-    void preRenderAllConfigurations(vkc::VulkanContext* ctx, uint32_t scfi);
+    void renderAllConfigurations(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
+    void preRenderAllConfigurations(vkc::VulkanContext* ctx, uint32_t frameIndex);
     void destroy_back(vkc::VulkanContext* ctx) override;
     vkc::SubpassRenderCallback* getRenderCallback() { return &this->renderCallback; }
 
    private:
-    GraphicalConfiguration* createNewConfiguration(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::PipelineConstraints constraints);
+    GraphicalConfiguration* createNewConfiguration(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::GraphicsPipelineConstraints constraints);
     std::unordered_map<std::string, std::unordered_set<GraphicalConfiguration*>> cache;
     std::vector<GraphicalConfiguration*> allConfigs;
     uint32_t currentIdentifier;
-    vkc::RenderGraphNode* parent;
+    vkc::RenderSubpass* parent;
+    vkc::RenderPass* renderPass;
     SubpassGCSRenderCallback renderCallback;
+
+    friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };
 
 class GraphicalConfigurationStore : public vkc::DeletableVulkanResource {

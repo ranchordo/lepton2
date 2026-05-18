@@ -18,7 +18,7 @@ void VulkanImage::buildImageView(VulkanContext* ctx, VkImageAspectFlags aspectFl
 }
 
 void VulkanImage::destroy_back(VulkanContext* ctx) {
-    if (!do_not_destroy_image && this->image != VK_NULL_HANDLE) {
+    if (!doNotDestroyImage && this->image != VK_NULL_HANDLE) {
         vkDestroyImage(ctx->device, this->image, nullptr);
     }
     if (this->imageView != VK_NULL_HANDLE) {

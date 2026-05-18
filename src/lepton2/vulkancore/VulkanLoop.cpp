@@ -1,104 +1,121 @@
 #include "VulkanLoop.h"
 
+#include "VulkanContext.h"
+
 using namespace lepton2::vulkancore;
+using namespace lepton2::vulkancore::loopmodifiers;
 
 void InFlightResources::create(VulkanContext* ctx) {
     this->imageAvailableSemaphore = createGenericSemaphore(ctx);
     this->renderFinishedSemaphore = createGenericSemaphore(ctx);
     this->inFlightFence = createGenericFence(ctx, true);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.pNext = nullptr;
+    allocInfo.commandPool = ctx->commandPools.normalGraphicsCompute;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(ctx->device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate command buffers.");
+    }
 }
 
 void InFlightResources::destroy_back(VulkanContext* ctx) {
     vkDestroySemaphore(ctx->device, imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(ctx->device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(ctx->device, inFlightFence, nullptr);
+
+    VkCommandPool owner = ctx->commandPools.normalGraphicsCompute;
+    vkFreeCommandBuffers(ctx->device, owner, 1, &commandBuffer);
 }
 
-VulkanLoop::VulkanLoop(RenderPass* renderState, uint32_t numInFlightFrames) {
-    this->renderState = renderState;
-    this->numInFlightFrames = numInFlightFrames;
-    this->inFlightResources.resize(numInFlightFrames);
+// Loop modifiers:
+void SimpleRenderPass::preRender(VulkanContext* ctx, uint32_t frameIndex) {
+    this->renderPass->preRenderAll(ctx, frameIndex);
 }
-
-void VulkanLoop::fillCommandBuffers(VulkanContext* ctx) {
-    uint32_t target = ctx->swapChain.swapChainImages.size();
-    uint32_t prevsize = this->commandBuffers.size();
-    if (prevsize < target) {
-        uint32_t growth = target - prevsize;
-        this->commandBuffers.resize(target);
-
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = ctx->vk_command_pools.normalGraphics;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = growth;
-
-        if (vkAllocateCommandBuffers(ctx->device, &allocInfo, commandBuffers.data() + prevsize) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate command buffers.");
-        }
+void SimpleRenderPass::renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, uint32_t swapchainIndex) {
+    if (this->renderPass->getNumFramebuffers() == 0) {
+        throw std::runtime_error("Trying to render a RenderPass with no framebuffers. Please initialize them.");
     }
+    uint32_t fbIdx = swapchainIndexing ? swapchainIndex : frameIndex;
+    this->renderPass->begin(buffer, fbIdx);
+    this->renderPass->renderAll(buffer, frameIndex, fbIdx);
+    this->renderPass->end(buffer);
+}
+void SimpleRenderPass::onSwapchainRebuild(VulkanContext* ctx) {
+    this->renderPass->destroyFramebuffers(ctx);
+    this->renderPass->generateFramebuffers(ctx, &targetContainer->images, targetContainer->extent);
+}
+
+VulkanLoop::VulkanLoop(uint32_t inFlightFrames) {
+    this->inFlightResources.resize(inFlightFrames);
 }
 
 void VulkanLoop::initialize(VulkanContext* ctx) {
-    for (uint32_t i = 0; i < numInFlightFrames; i++) {
+    for (uint32_t i = 0; i < inFlightResources.size(); i++) {
         this->inFlightResources[i].create(ctx);
     }
-    this->fillCommandBuffers(ctx);
-    this->forceRecordCommandBuffers(ctx);
 }
 
 bool VulkanLoop::shouldLoopTerminate(VulkanContext* ctx) {
     return glfwWindowShouldClose(ctx->window);
 }
 
-void VulkanLoop::forceRecordCommandBuffers(VulkanContext* ctx) {
-    for (uint32_t scfi = 0; scfi < ctx->swapChain.swapChainImages.size(); scfi++) {
-        VkCommandBuffer commandBuffer = commandBuffers[scfi];
-        vkResetCommandBuffer(commandBuffer, 0);
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;
-        beginInfo.pInheritanceInfo = nullptr;
-
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to begin recording command buffer.");
-        }
-
-        ctx->swapChain.updateViewportScissor(commandBuffer);
-
-        for (VulkanLoopModifier* loopmod : this->loopModifiers) { loopmod->preRender(scfi); }
-        renderState->begin(ctx, commandBuffer, scfi);
-        renderState->renderAll(commandBuffer, scfi);
-        renderState->end(commandBuffer);
-
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to record command buffer.");
-        }
-    }
-}
-
 void VulkanLoop::process(VulkanContext* ctx) {
     glfwPollEvents();
-    InFlightResources* ifr = &this->inFlightResources[this->inFlightFrameCount];
+    InFlightResources* ifr = &this->inFlightResources[inFlightFrameCount];
     vkWaitForFences(ctx->device, 1, &ifr->inFlightFence, VK_TRUE, UINT64_MAX);
     vkResetFences(ctx->device, 1, &ifr->inFlightFence);
-    SwapChainFrame swapChainFrame = ctx->swapChain.getFrame(ctx, ifr->imageAvailableSemaphore);
-    if (swapChainFrame.index == UINT32_MAX) {
+    SwapchainFrame swapchainFrame = ctx->swapchain.getFrame(ctx, ifr->imageAvailableSemaphore);
+    if (swapchainFrame.index == UINT32_MAX) {
         // Swapchain failure, rebuild
-        ctx->swapChain.rebuildSwapChain(ctx);
-        fillCommandBuffers(ctx);
-        forceRecordCommandBuffers(ctx);
-        if (vkQueueSubmit(ctx->vk_queues.graphics, 0, nullptr, ifr->inFlightFence) != VK_SUCCESS) {
+        ctx->swapchain.buildSwapchain(ctx);
+        for (VulkanLoopModifier* mod : this->loopModifiers) {
+            mod->onSwapchainRebuild(ctx);
+        }
+        if (vkQueueSubmit(ctx->queues.graphics, 0, nullptr, ifr->inFlightFence) != VK_SUCCESS) {
             throw std::runtime_error("Failed to submit dummy swapchain rebuild queue.\n");
         }
         return;
     }
-    VkCommandBuffer commandBuffer = this->commandBuffers[swapChainFrame.index];
 
-    renderState->preRenderAll(ctx, swapChainFrame.index);
+    // Pre-render phase
+    for (VulkanLoopModifier* loopmod : this->loopModifiers) {
+        loopmod->preRender(ctx, inFlightFrameCount);
+    }
 
+    // RenderCmd phase
+    VkCommandBuffer commandBuffer = ifr->commandBuffer;
+    vkResetCommandBuffer(commandBuffer, 0);
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.pNext = nullptr;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to begin recording command buffer.");
+    }
+
+    ctx->swapchain.updateViewportScissor(commandBuffer);
+
+    for (VulkanLoopModifier* loopmod : this->loopModifiers) {
+        loopmod->renderCmd(commandBuffer, inFlightFrameCount, swapchainFrame.index);
+    }
+    for (VulkanLoopModifier* loopmod : this->loopModifiers) {
+        loopmod->postRenderCmd(commandBuffer, inFlightFrameCount, swapchainFrame.index);
+    }
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to record command buffer.");
+    }
+
+    // Submit/present phase
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pNext = nullptr;
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = &ifr->imageAvailableSemaphore;
@@ -107,39 +124,33 @@ void VulkanLoop::process(VulkanContext* ctx) {
     submitInfo.pCommandBuffers = &commandBuffer;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &ifr->renderFinishedSemaphore;
-    if (vkQueueSubmit(ctx->vk_queues.graphics, 1, &submitInfo, ifr->inFlightFence) != VK_SUCCESS) {
+    if (vkQueueSubmit(ctx->queues.graphics, 1, &submitInfo, ifr->inFlightFence) != VK_SUCCESS) {
         throw std::runtime_error("Failed to submit command buffer.");
     }
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = nullptr;
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &ifr->renderFinishedSemaphore;
 
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &ctx->swapChain.swapChain;
-    presentInfo.pImageIndices = &swapChainFrame.index;
+    presentInfo.pSwapchains = ctx->swapchain.getSwapchain();
+    presentInfo.pImageIndices = &swapchainFrame.index;
     presentInfo.pResults = nullptr;
-    VkResult result = vkQueuePresentKHR(ctx->vk_queues.present, &presentInfo);
-
-    if (result == VK_SUCCESS) { // Explicit swapchain extent check
-        VkExtent2D knownSwapChainExtent = ctx->swapChain.swapChainExtent;
-        VkExtent2D extent = SwapChain::getCurrentExtent(ctx);
-        if (extent.width != knownSwapChainExtent.width || extent.height != knownSwapChainExtent.height) {
-            result = VK_SUBOPTIMAL_KHR;
-        }
-    }
+    VkResult result = vkQueuePresentKHR(ctx->queues.present, &presentInfo);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        ctx->swapChain.rebuildSwapChain(ctx);
-        fillCommandBuffers(ctx);
-        forceRecordCommandBuffers(ctx);
+        ctx->swapchain.buildSwapchain(ctx);
+        for (VulkanLoopModifier* mod : this->loopModifiers) {
+            mod->onSwapchainRebuild(ctx);
+        }
         return;
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to present swap chain image.");
     }
-    this->inFlightFrameCount++;
-    if (this->inFlightFrameCount >= this->numInFlightFrames) {
-        this->inFlightFrameCount %= this->numInFlightFrames;
+    inFlightFrameCount++;
+    if (inFlightFrameCount >= inFlightResources.size()) {
+        inFlightFrameCount %= inFlightResources.size();
     }
 }
 
@@ -148,12 +159,7 @@ void VulkanLoop::terminateLoop(VulkanContext* ctx) {
 }
 
 void VulkanLoop::destroy_back(VulkanContext* ctx) {
-    for (uint32_t i = 0; i < numInFlightFrames; i++) {
+    for (uint32_t i = 0; i < inFlightResources.size(); i++) {
         this->inFlightResources[i].destroy(ctx);
-    }
-    if (commandBuffers.size() > 0) {
-        VkCommandPool owner = ctx->vk_command_pools.normalGraphics;
-        vkFreeCommandBuffers(ctx->device, owner, commandBuffers.size(), commandBuffers.data());
-        commandBuffers.clear();
     }
 }

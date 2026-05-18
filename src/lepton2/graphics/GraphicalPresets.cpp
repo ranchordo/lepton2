@@ -16,38 +16,24 @@ VertexStructDescriptor objLoadVsd = {{{offsetof(ObjLoadVertex, pos), VK_FORMAT_R
                                      sizeof(ObjLoadVertex)};
 };  // namespace lepton2::graphics::graphicalpresets
 
-std::vector<SimplePresetVertex> screenVertices = {
+static std::vector<SimplePresetVertex> screenVertices = {
     {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
     {{+1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
     {{+1.0f, +1.0f, 0.0f}, {1.0f, 1.0f}},
     {{-1.0f, +1.0f, 0.0f}, {0.0f, 1.0f}}};
 
-std::vector<uint32_t> screenIndices = {1, 0, 3, 1, 3, 2};
+static std::vector<uint32_t> screenIndices = {1, 0, 3, 1, 3, 2};
 
-std::vector<vkc::ColorAttachmentInfo*> StaticScreenEntity::fromNodeOutputs(vkc::RenderGraphNode* node) {
-    std::vector<vkc::ColorAttachmentInfo*> ret;
-    for (uint32_t i = 0; i < node->getColorAttachments()->size(); i++) {
-        ret.push_back(&node->getColorAttachments()->at(i));
-    }
-    return ret;
-}
-
-PipelineConstraints StaticScreenEntity::getPipelineRequirements() {
+GraphicsPipelineConstraints StaticScreenEntity::getPipelineRequirements() {
     DescriptorSetLayoutInfo dsli;
-    for (uint32_t i = 0; i < this->colorAttachmentInfo.size(); i++) {
-        DescriptorInfo descInfo;
-        descInfo.inputAttachmentData.colorAttachmentInfo = this->colorAttachmentInfo[i];
-        descInfo.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-        descInfo.shaderStages = VK_SHADER_STAGE_FRAGMENT_BIT;
-        dsli.addNewBinding(descInfo);
-    }
-    PipelineConstraints req(this->shaderName, dsli, simplePresetVsd);
+    GraphicsPipelineConstraints req(this->shaderName, dsli, simplePresetVsd);
+    req.depthTestEnable = VK_FALSE;
+    req.depthWriteEnable = VK_FALSE;
     return req;
 }
 
-StaticScreenEntity::StaticScreenEntity(VulkanContext* ctx, const char* shaderName, std::vector<ColorAttachmentInfo*> colorAttachmentInfo) {
+StaticScreenEntity::StaticScreenEntity(VulkanContext* ctx, const char* shaderName) {
     this->shaderName = shaderName;
-    this->colorAttachmentInfo = colorAttachmentInfo;
     HostObjectData hostData(screenVertices.data(), screenVertices.size() * sizeof(SimplePresetVertex), screenIndices);
     DeviceObjectData* objectData = new DeviceObjectData(ctx, &hostData);
     this->addLinkedResource(objectData, true);
@@ -60,7 +46,7 @@ GenericEntity::GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, De
     this->vsd = vsd;
 }
 
-PipelineConstraints GenericEntity::getPipelineRequirements() {
+GraphicsPipelineConstraints GenericEntity::getPipelineRequirements() {
     DescriptorSetLayoutInfo dsli;
     {
         DescriptorInfo descInfo;
@@ -80,11 +66,11 @@ PipelineConstraints GenericEntity::getPipelineRequirements() {
             dsli.addNewBinding(descInfo);
         }
     }
-    PipelineConstraints ret(this->shaderName, dsli, this->vsd);
+    GraphicsPipelineConstraints ret(this->shaderName, dsli, this->vsd);
     return ret;
 }
 
-void GenericEntity::preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t scfi) {
+void GenericEntity::preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t frameIndex) {
     VulkanBuffer* uniformBuffer = ((descriptortypes::UniformBufferDescriptor*)(sds->instances[0]))->uniformBuffer;
     void* data = uniformBuffer->chonklet.mapMemory(ctx, 0);
     memcpy(data, ubo, ubo_size);

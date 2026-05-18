@@ -6,9 +6,8 @@ namespace lepton2::vulkancore {
 
 class VulkanContext;
 class ColorAttachmentInfo;
-struct DescriptorSetUpdateInfo;
+class DepthAttachmentInfo;
 class Texture;
-class TextureComponent;
 struct DescriptorInfo {
     VkDescriptorType descriptorType;
     struct {
@@ -17,7 +16,16 @@ struct DescriptorInfo {
         VulkanBuffer* bufferReference = nullptr;
     } uniformBufferData;
     struct {
-        ColorAttachmentInfo* colorAttachmentInfo;
+        VkDeviceSize bufferSize = 0;
+        bool createNewBuffer = true;
+        VulkanBuffer* bufferReference = nullptr;
+    } storageBufferData;
+    struct {
+        ImageArray* images = nullptr;
+    } storageImageData;
+    struct {
+        ColorAttachmentInfo* colorAttachmentInfo = nullptr;
+        DepthAttachmentInfo* depthAttachmentInfo = nullptr;
     } inputAttachmentData;
     struct {
         Texture* container;
@@ -31,6 +39,10 @@ struct DescriptorWriteInfoContainer {
     VkDescriptorImageInfo imageInfo;
     VkWriteDescriptorSet writeInfo;
 };
+
+namespace descriptortypes {
+class DescriptorType;
+}
 
 namespace descriptortypes {
 class DescriptorType : public DeletableVulkanResource {
@@ -52,18 +64,39 @@ class UniformBufferDescriptor : public DescriptorType {
     VkDeviceSize uniformBufferSize;
 };
 
+class StorageBufferDescriptor : public DescriptorType {
+   public:
+    StorageBufferDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index);
+    VkDescriptorType getDescriptorType() override { return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; }
+    DescriptorWriteInfoContainer getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) override;
+    void destroy_back(VulkanContext* ctx) override;
+
+    VulkanBuffer* storageBuffer;
+    VkDeviceSize storageBufferSize;
+};
+
+class StorageImageDescriptor : public DescriptorType {
+    public:
+    StorageImageDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index);
+    VkDescriptorType getDescriptorType() override { return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; }
+    DescriptorWriteInfoContainer getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) override;
+    void destroy_back(VulkanContext* ctx) override {}
+
+    ImageArray* images;
+    uint32_t index;
+};
+
 class ImageSamplerDescriptor : public DescriptorType {
    public:
     ImageSamplerDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index);
     VkDescriptorType getDescriptorType() override { return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; }
     DescriptorWriteInfoContainer getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) override;
-    void destroy_back(VulkanContext* ctx) override;
+    void destroy_back(VulkanContext* ctx) override {}
 
    private:
     Texture* container;
     uint32_t componentIndex;
     uint32_t imageIndex;
-    DescriptorSetUpdateInfo* updateInfo = nullptr;
 };
 
 class InputAttachmentDescriptor : public DescriptorType {
@@ -71,12 +104,12 @@ class InputAttachmentDescriptor : public DescriptorType {
     InputAttachmentDescriptor(VulkanContext* ctx, DescriptorInfo info, uint32_t index);
     VkDescriptorType getDescriptorType() override { return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT; }
     DescriptorWriteInfoContainer getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) override;
-    void destroy_back(VulkanContext* ctx) override;
+    void destroy_back(VulkanContext* ctx) override {}
 
    private:
     ColorAttachmentInfo* colorAttachmentInfo;
+    DepthAttachmentInfo* depthAttachmentInfo;
     uint32_t arrayIndex;
-    DescriptorSetUpdateInfo* updateInfo = nullptr;
 };
 }  // namespace descriptortypes
 
@@ -98,13 +131,6 @@ class DescriptorPool : public DeletableVulkanResource {
     VkDescriptorPool descriptorPool;
     uint32_t totalSets;
     uint32_t usedSets;
-};
-
-struct DescriptorSetUpdateInfo {
-    VkDescriptorSet dstSet;
-    uint32_t dstBinding;
-    descriptortypes::DescriptorType* instance;
-    bool alive = false;
 };
 
 struct SingleDescriptorSet {

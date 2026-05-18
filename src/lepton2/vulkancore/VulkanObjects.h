@@ -8,7 +8,7 @@ class VulkanContext;
 class VulkanImage : public DeletableVulkanResource {
    public:
     VkImage image = VK_NULL_HANDLE;
-    bool do_not_destroy_image = false;
+    bool doNotDestroyImage = false;
     VkFormat imageFormat;
     VkImageView imageView = VK_NULL_HANDLE;
     MemoryChonklet chonklet;

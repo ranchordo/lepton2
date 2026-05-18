@@ -11,11 +11,13 @@ namespace vkc = lepton2::vulkancore;
 
 class GraphicalEntity : public vkc::DeletableVulkanResource {
    public:
-    void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderGraphNode* node, GraphicalConfigurationStore* store);
+    void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store);
     void render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
     void doPreRender(vkc::VulkanContext* ctx, uint32_t frameIndex) {
         this->preRender(ctx, &dsa->singleDescriptorSets[frameIndex], frameIndex);
     }
+
+    GraphicalConfigurationHandle& getConfigurationHandle() { return pipelineData; }
 
     void destroyEntityResources(vkc::VulkanContext* ctx);
     virtual void destroy_back(vkc::VulkanContext* ctx) override {
@@ -23,9 +25,10 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     }
 
    protected:
-    virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderGraphNode* node) {}
-    virtual vkc::PipelineConstraints getPipelineRequirements() = 0;
-    virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t scfi) {}
+    virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node) {}
+    virtual vkc::GraphicsPipelineConstraints getPipelineRequirements() = 0;
+    virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t frameIndex) {}
+    virtual void preRenderCmd(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {}
     void setObjectData(vkc::DeviceObjectData* objectData) { this->objectData = objectData; }
 
    private:
@@ -33,6 +36,8 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     vkc::DeviceObjectData* objectData = nullptr;
     uint32_t numInstances = 1;
     vkc::DescriptorSetArray* dsa;
+
+    friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };
 
 }  // namespace lepton2::graphics

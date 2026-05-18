@@ -2,13 +2,11 @@
 
 #include "Framebuffer.h"
 #include "Pipelines.h"
-#include "SwapChain.h"
-#include "VulkanContext.h"
 #include "VulkanUtils.h"
 
 namespace lepton2::vulkancore {
 struct RenderTargetImageCreationInfo {
-    bool use_presenter = false;
+    bool isTerminal = false;
     VkFormat format;
     VkSampleCountFlagBits samples;
     VkImageTiling imageTiling;
@@ -16,7 +14,8 @@ struct RenderTargetImageCreationInfo {
     VkMemoryPropertyFlags memoryProperties;
     VkImageAspectFlags aspectFlags;
     VkPipelineColorBlendAttachmentState blendState;
-    std::vector<VulkanImage*>* creationTracker;
+    uint32_t nodeidx;
+    uint32_t colorAttachmentIdx;
 };
 
 // Utility function to decrease verbosity
@@ -26,36 +25,94 @@ struct ColorAttachmentInfo {
     VkAttachmentDescription desc;
     RenderTargetImageCreationInfo rticInfo;
     VkClearValue clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
-    std::vector<VulkanImage*> swapChainCreations;
+    std::vector<VulkanImage*> renderTargets;
+};
+
+struct DepthAttachmentInfo {
+    std::vector<VulkanImage*> depthTargetImages;
+};
+
+class RenderSubpass;
+class RenderPass : public DeletableVulkanResource {
+   public:
+    RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& subpasses, uint32_t resourceMultiplicity);
+
+    // Rendering
+    void begin(VkCommandBuffer commandBuffer, uint32_t framebufferIndex);
+    void preRenderAll(VulkanContext* ctx, uint32_t frameIndex);
+    void renderAll(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t framebufferIndex);
+    void end(VkCommandBuffer commandBuffer);
+
+    // Initial configuration
+    void generateFramebuffers(VulkanContext* ctx, std::vector<VulkanImage*>* final_images, VkExtent2D extent);
+    void destroyFramebuffers(VulkanContext* ctx);
+    void setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
+    void setSuperpassLayouts(std::vector<VkDescriptorSetLayout> superpassLayouts);
+
+    // Simple getters/setters
+    uint32_t numSubpasses() { return this->nodes.size(); }
+    RenderSubpass* getNode(uint32_t idx) { return this->nodes[idx]; }
+    uint32_t getResourceMultiplicity() { return this->resourceMultiplicity; }
+    uint32_t getNumFramebuffers() { return this->targets.size(); }
+    DescriptorSetArray* getPassDsa() { return this->passDsa; }
+    std::vector<VkDescriptorSetLayout>& getSuperpassLayouts() { return this->superpassLayouts; }
+    VkRenderPass getRenderPass() { return this->renderPass; }
+    DepthAttachmentInfo* getDepthAttachmentInfo() { return &this->depthAttachmentInfo; }
+    void setDepthStencilClearValue(VkClearDepthStencilValue val) { this->depthStencilClearValue.depthStencil = val; }
+
+    void destroy_back(VulkanContext* ctx) override;
+
+   private:
+    VkClearValue depthStencilClearValue = VkClearValue{.depthStencil = {1.0f, 0}};
+    VkRenderPass renderPass = VK_NULL_HANDLE;
+    std::vector<VkClearValue*> clearValuePtrs;
+    std::vector<RenderTargetImageCreationInfo> rticInfos;
+    std::vector<RenderSubpass*> nodes;
+    std::vector<Framebuffer*> targets;
+    std::vector<VulkanImage*> renderTargetImages;
+    DepthAttachmentInfo depthAttachmentInfo;
+    DescriptorSetArray* passDsa = nullptr;
+    VkPipelineLayout dummyPassLayout = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSetLayout> superpassLayouts;
+    uint32_t resourceMultiplicity;
 };
 
 class SubpassRenderCallback {
    public:
-    virtual void renderSubpassCmd(VkCommandBuffer commandBuffer, RenderPass* pass, uint32_t scfi, uint32_t setidx) = 0;
-    virtual void preRenderSubpass(VulkanContext* ctx, uint32_t scfi) = 0;
+    virtual void renderSubpassCmd(VkCommandBuffer commandBuffer, RenderPass* pass, uint32_t frameIndex, uint32_t setidx) = 0;
+    virtual void preRenderSubpass(VulkanContext* ctx, uint32_t frameIndex) = 0;
 };
 
-class RenderPass;
-class RenderGraphNode : public DeletableVulkanResource {
+struct TerminatingSubpassConfig {
+    VkAttachmentDescription attachmentDescription;
+    VkPipelineColorBlendAttachmentState blendState;
+};
+
+class RenderSubpass : public DeletableVulkanResource {
    public:
+    RenderSubpass();  // Non-terminating default
+    RenderSubpass(VulkanContext* ctx, TerminatingSubpassConfig config);
+
+    static TerminatingSubpassConfig getDefaultTerminatingConfig(VkFormat imageFormat, VkImageLayout finalLayout);
+
     ColorAttachmentInfo* addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
-    void connectFromNode(RenderGraphNode* src, uint32_t color_output, uint32_t inputAttachmentIndex);
-    void destroy_back(VulkanContext* ctx) override;
-    uint32_t getSubpassIndex() { return this->nodeIndex; }
+    void connectFromNode(RenderSubpass* src, uint32_t color_output, uint32_t inputAttachmentIndex);
     void requestDepthAsInput(uint32_t index);
-    std::vector<ColorAttachmentInfo>* getColorAttachments() {
-        return &this->colorAttachments;
-    }
-    void setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, DescriptorSetLayoutInfo dsli);
-    DescriptorSetArray* getSubpassDsa() { return this->subpassDsa; }
-    void setRenderCallback(SubpassRenderCallback* callback) { this->renderCallback = callback; }
+
+    uint32_t getSubpassIndex() { return this->nodeIndex; }
+    std::vector<ColorAttachmentInfo>& getColorAttachments() { return this->colorAttachments; }
     SubpassRenderCallback* getRenderCallback() { return this->renderCallback; }
     VkPipelineLayout getDummySubpassLayout() { return this->dummySubpassLayout; }
+    DescriptorSetArray* getSubpassDsa() { return this->subpassDsa; }
+    DescriptorSetArray* getSubpassAttachmentDsa() { return this->subpassAttachmentDsa; }
+
+    void setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, DescriptorSetLayoutInfo dsli);
+    void setRenderCallback(SubpassRenderCallback* callback) { this->renderCallback = callback; }
+
+    void destroy_back(VulkanContext* ctx) override;
 
    private:
-    RenderGraphNode();
-    RenderGraphNode(VulkanContext* ctx, bool is_terminating_node);
-    void topologicalSort(std::vector<RenderGraphNode*>* orderedNodes);
+    void topologicalSort(std::vector<RenderSubpass*>* orderedNodes);
     struct {
         std::vector<VkAttachmentReference> colorAttachmentReferences;
         std::vector<VkAttachmentReference> inputAttachmentReferences;
@@ -66,55 +123,12 @@ class RenderGraphNode : public DeletableVulkanResource {
     uint32_t nodeIndex = 0;
     uint8_t markings = 0;
     uint32_t depthInputRequest = UINT32_MAX;
-    std::unordered_map<uint32_t, std::pair<uint32_t, RenderGraphNode*>> inputs;
+    std::unordered_map<uint32_t, std::pair<uint32_t, RenderSubpass*>> inputs;
     DescriptorSetArray* subpassDsa = nullptr;
+    DescriptorSetArray* subpassAttachmentDsa = nullptr;
     SubpassRenderCallback* renderCallback = nullptr;
     VkPipelineLayout dummySubpassLayout = VK_NULL_HANDLE;
 
-    friend class RenderGraph;
-};
-
-class RenderGraph;
-
-class RenderPass : public DeletableVulkanResource {
-   public:
-    VkRenderPass renderPass = VK_NULL_HANDLE;
-    std::vector<VkClearValue*> clearValuePtrs;
-    std::vector<RenderTargetImageCreationInfo> rticInfos;
-    void begin(VulkanContext* ctx, VkCommandBuffer commandBuffer, uint32_t scfi);
-    void preRenderAll(VulkanContext* ctx, uint32_t frameIndex);
-    void renderAll(VkCommandBuffer commandBuffer, uint32_t frameIndex);
-    void end(VkCommandBuffer commandBuffer);
-    void destroy_back(VulkanContext* ctx) override;
-    VkClearValue depthStencilClearValue = {1.0f, 0};
-
-    uint32_t numSubpasses() { return this->nodes.size(); }
-    RenderGraphNode* getNode(uint32_t idx) { return this->nodes[idx]; }
-
-    void setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
-    void setSuperpassLayouts(std::vector<VkDescriptorSetLayout> superpassLayouts);
-    // void removePassDescriptorSet();
-    DescriptorSetArray* getPassDsa() { return this->passDsa; }
-    std::vector<VkDescriptorSetLayout> getSuperpassLayouts() { return this->superpassLayouts; }
-
-   private:
-    std::vector<RenderGraphNode*> nodes;
-    DescriptorSetArray* passDsa = nullptr;
-    VkPipelineLayout dummyPassLayout = VK_NULL_HANDLE;
-    std::vector<VkDescriptorSetLayout> superpassLayouts;
-    friend class RenderGraph;
-};
-
-class RenderGraph : public DeletableVulkanResource {
-   public:
-    RenderGraphNode* buildPresentingNode(VulkanContext* ctx);
-    RenderGraphNode* buildNewNode();
-    RenderPass* buildRenderState(VulkanContext* ctx);
-    void destroy_back(VulkanContext* ctx) override;
-
-   private:
-    std::vector<RenderGraphNode*> nodes;
-    RenderGraphNode* terminator = nullptr;
-    friend class RenderPass;
+    friend RenderPass::RenderPass(VulkanContext*, const std::vector<RenderSubpass*>&, uint32_t);
 };
 }  // namespace lepton2::vulkancore

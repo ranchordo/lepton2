@@ -1,0 +1,26 @@
+#version 450
+
+layout (binding = 0) buffer ThingSSBO {
+    int atomic_total_invocations;
+    int atomic_total_primes;
+    int test_thing[];
+};
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+bool is_prime(uint value) { // Super inefficient, just for demonstration
+    if (value < 2) return false;
+    uint rough_sqrt = uint(floor(sqrt(float(value))));
+    for (uint i = 2; i <= rough_sqrt; i++) {
+        if ((value % i) == 0) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    atomicAdd(atomic_total_invocations, 1);
+    bool prime = is_prime(index);
+    test_thing[index] = prime ? int(index) : -1;
+    if (prime) atomicAdd(atomic_total_primes, 1);
+}

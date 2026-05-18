@@ -116,7 +116,20 @@ class DeletableVulkanResourceTracker : public DeletableVulkanResource {
 enum ImageLayoutTransitionMode {
     ILTM_UNDEFINED_TO_TRANSFER_DST,
     ILTM_TRANSFER_DST_TO_SHADER_READ_ONLY,
-    ILTM_UNDEFINED_TO_SHADER_READ_ONLY
+    ILTM_UNDEFINED_TO_SHADER_READ_ONLY,
+    ILTM_UNDEFINED_TO_PRESENT_SRC_KHR
+};
+
+class ImageArray : public DeletableVulkanResource {
+   public:
+    ImageArray() {}
+    ImageArray(const std::vector<VulkanImage*>& images) {
+        this->images = images;
+    }
+
+    std::vector<VulkanImage*> images;
+    VkExtent2D extent;
+    void destroy_back(VulkanContext* ctx) override;
 };
 
 extern uint32_t findMemoryType(VulkanContext* ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -127,8 +140,8 @@ extern void createImage(VulkanContext* ctx, uint32_t width, uint32_t height,
                         VkMemoryPropertyFlags properties, VkImageAspectFlags aspectFlags, VulkanImage* image);
 extern void createRenderTarget(VulkanContext* ctx, VkExtent2D extent,
                                RenderTargetImageCreationInfo* rticInfo, VulkanImage* image);
-extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx);
-extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer);
+extern VkCommandBuffer beginSingleTimeCommands(VulkanContext* ctx, VkCommandPool pool);
+extern void endSingleTimeCommands(VulkanContext* ctx, VkCommandBuffer commandBuffer, VkQueue queue, VkCommandPool pool);
 extern void transitionImageLayout(VulkanContext* ctx, VulkanImage* image, ImageLayoutTransitionMode iltm);
 extern void copyBufferToImage(VulkanContext* ctx, VulkanBuffer* buffer, VulkanImage* image, uint32_t width, uint32_t height);
 extern VkImageView createImageView(VulkanContext* ctx, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);

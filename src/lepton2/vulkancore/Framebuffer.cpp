@@ -15,7 +15,8 @@ void Framebuffer::destroy_back(VulkanContext* ctx) {
     }
 }
 
-void Framebuffer::buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, uint32_t width, uint32_t height) {
+void Framebuffer::buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, VkExtent2D extent) {
+    this->extent = extent;
     std::vector<VkImageView> attachments;
     for (uint32_t i = 0; i < this->images.size(); i++) {
         attachments.push_back(this->images[i]->imageView);
@@ -23,11 +24,12 @@ void Framebuffer::buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, 
 
     VkFramebufferCreateInfo framebufferInfo{};
     framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.pNext = nullptr;
     framebufferInfo.renderPass = renderPass;
     framebufferInfo.attachmentCount = (uint32_t)attachments.size();
     framebufferInfo.pAttachments = attachments.data();
-    framebufferInfo.width = width;
-    framebufferInfo.height = height;
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
     framebufferInfo.layers = 1;
     if (vkCreateFramebuffer(ctx->device, &framebufferInfo, nullptr, &this->framebuffer) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create a framebuffer.");

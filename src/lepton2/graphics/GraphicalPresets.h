@@ -27,22 +27,20 @@ extern vkc::VertexStructDescriptor objLoadVsd;
 
 class StaticScreenEntity : public GraphicalEntity {
    public:
-    StaticScreenEntity(vkc::VulkanContext* ctx, const char* shaderName, std::vector<vkc::ColorAttachmentInfo*> colorAttachmentInfo);
-    vkc::PipelineConstraints getPipelineRequirements() override;
-    static std::vector<vkc::ColorAttachmentInfo*> fromNodeOutputs(vkc::RenderGraphNode* node);
+    StaticScreenEntity(vkc::VulkanContext* ctx, const char* shaderName);
+    vkc::GraphicsPipelineConstraints getPipelineRequirements() override;
 
     void destroy_back(vkc::VulkanContext* ctx) override { this->destroyEntityResources(ctx); }
 
    private:
-    std::vector<vkc::ColorAttachmentInfo*> colorAttachmentInfo;
     const char* shaderName;
 };
 
 class GenericEntity : public GraphicalEntity {
    public:
     GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, vkc::DeviceObjectData* objectData, vkc::VertexStructDescriptor vsd = objLoadVsd);
-    vkc::PipelineConstraints getPipelineRequirements() override;
-    void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t scfi) override;
+    vkc::GraphicsPipelineConstraints getPipelineRequirements() override;
+    void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t frameIndex) override;
     void setTexture(vkc::Texture* texture) { this->texture = texture; }
     virtual void logic() {};
 

@@ -156,6 +156,7 @@ MemoryChonkus* VulkanAllocationManager::buildChonkus(VulkanContext* ctx, VkDevic
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.pNext = nullptr;
     allocInfo.allocationSize = size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     if (vkAllocateMemory(ctx->device, &allocInfo, nullptr, &chonkus->memory) != VK_SUCCESS) {

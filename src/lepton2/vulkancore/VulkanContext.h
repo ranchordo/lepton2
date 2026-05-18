@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Descriptors.h"
-#include "SwapChain.h"
+#include "Swapchain.h"
 #include "VulkanMemory.h"
 #include "VulkanUtils.h"
 
@@ -10,20 +10,18 @@
 namespace lepton2::vulkancore {
 
 struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> graphicsComputeFamily;
+    std::optional<uint32_t> computeFamily;
     std::optional<uint32_t> presentFamily;
-    bool is_complete() {
-        if (!graphicsFamily.has_value()) {
-            return false;
-        }
-        if (!presentFamily.has_value()) {
-            return false;
-        }
+    bool isComplete(bool requirePresent) {
+        if (!graphicsComputeFamily.has_value()) return false;
+        if (!computeFamily.has_value()) return false;
+        if (requirePresent && !presentFamily.has_value()) return false;
         return true;
     }
 };
 
-struct SwapChainSupportDetails {
+struct SwapchainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
@@ -34,47 +32,51 @@ struct SwapChainSupportDetails {
 
 class VulkanContext : public DeletableVulkanResource {
    public:
-    VulkanContext(const char* argv0, bool _enable_validation_layers, bool _print_debug_info, VkApplicationInfo appInfo, GLFWwindow* _window) {
+    VulkanContext(const char* argv0, bool _enableValidationLayers, bool _printDebugInfo, VkApplicationInfo appInfo, GLFWwindow* _window) {
         this->window = _window;
-        this->enable_validation_layers = _enable_validation_layers;
-        this->print_debug_info = _print_debug_info;
+        this->enableValidationLayers = _enableValidationLayers;
+        this->printDebugInfo = _printDebugInfo;
         this->createInstance(appInfo);
-        this->createSurface();
+        if (_window != nullptr) this->createSurface();
         this->pickPhysicalDevice();
         this->createLogicalDevice();
-        this->swapChain.querySwapChain(this);
         this->buildAllCommandPools();
         this->setRelativePaths(argv0);
+        if (_window != nullptr) this->swapchain.querySwapchain(this);
     }
     GLFWwindow* window;
-    VkInstance instance;
+    VkInstance instance = VK_NULL_HANDLE;
     VkDevice device;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     struct {
         VkQueue graphics;
+        VkQueue compute;
         VkQueue present;
-    } vk_queues;
-    VkSurfaceKHR surface;
+    } queues;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
     struct {
-        VkCommandPool normalGraphics;
-        VkCommandPool transientGraphics;
-    } vk_command_pools;
+        VkCommandPool normalGraphicsCompute;
+        VkCommandPool transientGraphicsCompute;
+        VkCommandPool normalCompute;
+        VkCommandPool transientCompute;
+    } commandPools;
     VulkanAllocationManager allocManager;
-    SwapChain swapChain;
+    Swapchain swapchain;
     DescriptorPoolManager descriptorPoolManager;
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+    SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device);
+    const std::vector<const char*> getRequiredDeviceExtensions();
     void destroy_back(VulkanContext* ctx) override;
 
-    char* buildShaderLoadPaths(const char* rel);
+    char* buildShaderLoadPaths(const char* rel, bool compute);
     char* buildAssetLoadPath(const char* rel);
 
    private:
-    bool enable_validation_layers;
-    bool print_debug_info;
+    bool enableValidationLayers;
+    bool printDebugInfo;
 
-    char* shaders_spirv_load_path;
-    char* assets_load_path;
+    char* shaderSpirvLoadPath;
+    char* assetsLoadPath;
 
     VkDebugUtilsMessengerEXT debugMessenger;
     void createInstance(VkApplicationInfo appInfo);

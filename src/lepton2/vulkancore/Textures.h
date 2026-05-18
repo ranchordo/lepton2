@@ -5,23 +5,17 @@
 
 namespace lepton2::vulkancore {
 
-class VulkanContext;
-class Texture;
 class TextureComponent : public DeletableVulkanResource {
    public:
-    TextureComponent(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height);
-    TextureComponent(VulkanContext* ctx, const char* filename);
-    TextureComponent(VulkanImage* image) { this->textureImage = image; }
-    TextureComponent(bool useSwapChainIndexing) {
-        this->useSwapChainIndexing = useSwapChainIndexing;
-    }
-    VulkanImage* textureImage = nullptr;
-    std::vector<VulkanImage*> swapChainIndexedImages;
+    TextureComponent(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height, VkFormat format);
+    TextureComponent(VulkanContext* ctx, const char* filename, VkFormat format);
+    TextureComponent(VulkanImage* image) { this->image = image; }
+
+    VulkanImage* image = nullptr;
     void destroy_back(VulkanContext* ctx) override;
-    bool useSwapChainIndexing = false;
 
    private:
-    void createTextureImage(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height);
+    void buildImage(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height, VkFormat format);
 };
 
 struct SamplerInfo {
@@ -36,9 +30,9 @@ struct SamplerInfo {
 class Texture : public DeletableVulkanResource {
    public:
     Texture(VulkanContext* ctx, SamplerInfo samplerInfo);
-    // Note: Texture components are then linked for destruction!
-    void addTextureComponent(TextureComponent* component);
-    void addTextureComponent(VulkanContext* ctx, const char* filename);
+    // Note: Texture components are then linked for destruction
+    void addTextureComponent(TextureComponent* images);
+    void addTextureComponent(VulkanContext* ctx, const char* filename, VkFormat format);
     void destroy_back(VulkanContext* ctx) override;
     std::vector<TextureComponent*> components;
     VkSampler textureSampler;

@@ -9,9 +9,15 @@ class Framebuffer : public DeletableVulkanResource {
    public:
     Framebuffer() {}
     void addImage(VulkanImage* image);
-    void buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, uint32_t width, uint32_t height);
+    const std::vector<VulkanImage*>& getImages() { return this->images; }
+    VkFramebuffer getFramebuffer() { return this->framebuffer; }
+    VkExtent2D getExtent() { return this->extent; }
+    void buildFramebuffer(VulkanContext* ctx, VkRenderPass renderPass, VkExtent2D extent);
+    void destroy_back(VulkanContext* ctx) override;
+
+    private:
     std::vector<VulkanImage*> images;
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
-    void destroy_back(VulkanContext* ctx) override;
+    VkExtent2D extent;
 };
 }  // namespace lepton2::vulkancore

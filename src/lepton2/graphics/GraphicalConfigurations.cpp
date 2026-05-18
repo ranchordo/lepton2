@@ -6,16 +6,16 @@
 using namespace lepton2::graphics;
 using namespace lepton2::vulkancore;
 
-void GraphicalConfiguration::renderAllUsers(VkCommandBuffer commandBuffer, uint32_t scfi, uint32_t setidx) {
+void GraphicalConfiguration::renderAllUsers(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {
     this->pipeline->bind(commandBuffer);
     for (GraphicalEntity* entity : this->users) {
-        entity->render(commandBuffer, scfi, setidx);
+        entity->render(commandBuffer, frameIndex, setidx);
     }
 }
 
-void GraphicalConfiguration::preRenderAllUsers(VulkanContext* ctx, uint32_t scfi) {
+void GraphicalConfiguration::preRenderAllUsers(VulkanContext* ctx, uint32_t frameIndex) {
     for (GraphicalEntity* entity : this->users) {
-        entity->doPreRender(ctx, scfi);
+        entity->doPreRender(ctx, frameIndex);
     }
 }
 
@@ -26,7 +26,7 @@ void GraphicalConfiguration::destroy_back(VulkanContext* ctx) {
     delete this->layoutReference;
 }
 
-GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfiguration(VulkanContext* ctx, RenderPass* renderState, PipelineConstraints constraints) {
+GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfiguration(VulkanContext* ctx, RenderPass* renderState, GraphicsPipelineConstraints constraints) {
     GraphicalConfiguration* newConfiguration = new GraphicalConfiguration();
     newConfiguration->layoutReference = new DescriptorSetArray(constraints.layoutInfo);
     newConfiguration->layoutReference->buildDescriptorSetLayout(ctx);
@@ -36,19 +36,23 @@ GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfigurati
     if (renderState->getPassDsa() != nullptr) {
         dsl.push_back(renderState->getPassDsa()->descriptorSetLayout);
     }
-    // Add subpass DSL
+    // Add subpass DSLs
     if (parent->getSubpassDsa() != nullptr) {
         dsl.push_back(parent->getSubpassDsa()->descriptorSetLayout);
     }
+    if (parent->getSubpassAttachmentDsa() != nullptr) {
+        dsl.push_back(parent->getSubpassAttachmentDsa()->descriptorSetLayout);
+    }
     // Add pipeline DSL
-    dsl.push_back(newConfiguration->layoutReference->descriptorSetLayout);
-    PipelineInfo newPipelineInfo(dsl, constraints);
-    newConfiguration->pipeline = new GraphicsPipeline(ctx, this->parent, renderState->renderPass, newPipelineInfo);
+    if (newConfiguration->layoutReference->layoutInfo.bindings.size() > 0) {
+        dsl.push_back(newConfiguration->layoutReference->descriptorSetLayout);
+    }
+    GraphicsPipelineInfo newPipelineInfo(dsl, constraints);
+    newConfiguration->pipeline = new GraphicsPipeline(ctx, this->parent, renderState->getRenderPass(), newPipelineInfo);
     return newConfiguration;
 }
 
-GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguration(VulkanContext* ctx, RenderPass* renderState,
-                                                                                  PipelineConstraints constraints, GraphicalEntity* user) {
+GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguration(VulkanContext* ctx, GraphicsPipelineConstraints constraints, GraphicalEntity* user) {
     std::unordered_set<GraphicalConfiguration*>* selectedVector = nullptr;
     if (this->cache.count(constraints.shaderName) == 0) {
         std::unordered_set<GraphicalConfiguration*> newTempVector;
@@ -62,26 +66,77 @@ GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguratio
             ret.user = user;
             ret.config = candidate;
             ret.store = this;
+            ret.config->users.push_back(user);
             return ret;
         }
         selectedVector = &candidates;
     }
-    GraphicalConfiguration* newConfiguration = this->createNewConfiguration(ctx, renderState, constraints);
+    GraphicalConfiguration* newConfiguration = this->createNewConfiguration(ctx, renderPass, constraints);
     selectedVector->insert(newConfiguration);
     this->allConfigs.push_back(newConfiguration);
     GraphicalConfigurationHandle ret;
     ret.user = user;
     ret.config = newConfiguration;
     ret.store = this;
+    ret.config->users.push_back(user);
     return ret;
 }
 
-void SubpassGCSRenderCallback::renderSubpassCmd(VkCommandBuffer commandBuffer, RenderPass* pass, uint32_t scfi, uint32_t setidx) {
-    this->store->renderAllConfigurations(commandBuffer, scfi, setidx);
+static void debugPrintDescriptorSetArray(DescriptorSetArray* dsa, uint32_t* setidx, const char* phase) {
+    uint32_t numdesc = dsa->layoutInfo.descInfo.size();
+    uint32_t rmult = dsa->singleDescriptorSets.size();
+    printf("    %s @(set = %u) with %u descriptor(s), multiplicity %u:\n", phase, *setidx, numdesc, rmult);
+    for (uint32_t j = 0; j < numdesc; j++) {
+        printf("        Descriptor @(binding = %u), type ", j);
+        DescriptorInfo& descInfo = dsa->layoutInfo.descInfo[j];
+#define ADD_TYPE_CASE(type) \
+    case type:              \
+        printf(#type "\n"); \
+        break;
+        switch (descInfo.descriptorType) {
+            ADD_TYPE_CASE(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            ADD_TYPE_CASE(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+            ADD_TYPE_CASE(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            ADD_TYPE_CASE(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+            default:
+                throw std::runtime_error("Unsupported descriptor type.");
+        }
+#undef ADD_TYPE_CASE
+    }
+    (*setidx)++;
 }
 
-void SubpassGCSRenderCallback::preRenderSubpass(VulkanContext* ctx, uint32_t scfi) {
-    this->store->preRenderAllConfigurations(ctx, scfi);
+void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors() {
+    printf("GraphicalConfigurationHandle::debugPrintAllBoundDescriptors:\n");
+    printf("    Shader name: %s\n", config->pipeline->creationConstraints.shaderName);
+    uint32_t start_set = store->renderPass->getSuperpassLayouts().size();
+    printf("    Not shown: %u superpass descriptor sets\n", start_set);
+
+    uint32_t setidx = 0;
+    // Add pass DSA
+    if (store->renderPass->getPassDsa() != nullptr) {
+        debugPrintDescriptorSetArray(store->renderPass->getPassDsa(), &setidx, "renderPass->passDsa");
+    }
+    // Add subpass DSAs
+    if (store->parent->getSubpassDsa() != nullptr) {
+        debugPrintDescriptorSetArray(store->parent->getSubpassDsa(), &setidx, "renderSubpass->subpassDsa");
+    }
+    if (store->parent->getSubpassAttachmentDsa() != nullptr) {
+        debugPrintDescriptorSetArray(store->parent->getSubpassAttachmentDsa(), &setidx, "renderSubpass->subpassAttachmentDsa");
+    }
+    // Add entity DSA
+    if (config->layoutReference->layoutInfo.bindings.size() > 0) {
+        debugPrintDescriptorSetArray(user->dsa, &setidx, "graphicalEntity->dsa");
+    }
+    printf("End of descriptor sets\n");
+}
+
+void SubpassGCSRenderCallback::renderSubpassCmd(VkCommandBuffer commandBuffer, RenderPass* pass, uint32_t frameIndex, uint32_t setidx) {
+    this->store->renderAllConfigurations(commandBuffer, frameIndex, setidx);
+}
+
+void SubpassGCSRenderCallback::preRenderSubpass(VulkanContext* ctx, uint32_t frameIndex) {
+    this->store->preRenderAllConfigurations(ctx, frameIndex);
 }
 
 void SubpassGraphicalConfigurationStore::dropConfigurationHandle(VulkanContext* ctx, GraphicalConfigurationHandle handle) {
@@ -108,15 +163,15 @@ void SubpassGraphicalConfigurationStore::dropConfigurationHandle(VulkanContext* 
     }
 }
 
-void SubpassGraphicalConfigurationStore::renderAllConfigurations(VkCommandBuffer commandBuffer, uint32_t scfi, uint32_t setidx) {
+void SubpassGraphicalConfigurationStore::renderAllConfigurations(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {
     for (GraphicalConfiguration* config : allConfigs) {
-        config->renderAllUsers(commandBuffer, scfi, setidx);
+        config->renderAllUsers(commandBuffer, frameIndex, setidx);
     }
 }
 
-void SubpassGraphicalConfigurationStore::preRenderAllConfigurations(VulkanContext* ctx, uint32_t scfi) {
+void SubpassGraphicalConfigurationStore::preRenderAllConfigurations(VulkanContext* ctx, uint32_t frameIndex) {
     for (GraphicalConfiguration* config : allConfigs) {
-        config->preRenderAllUsers(ctx, scfi);
+        config->preRenderAllUsers(ctx, frameIndex);
     }
 }
 
@@ -134,7 +189,7 @@ void GraphicalConfigurationStore::addAllSubpasses(RenderPass* pass) {
     if (this->subpassStores.count(pass) > 0) return;
     std::vector<SubpassGraphicalConfigurationStore*> stores(pass->numSubpasses());
     for (uint32_t i = 0; i < pass->numSubpasses(); i++) {
-        SubpassGraphicalConfigurationStore* store = new SubpassGraphicalConfigurationStore(pass->getNode(i));
+        SubpassGraphicalConfigurationStore* store = new SubpassGraphicalConfigurationStore(pass->getNode(i), pass);
         this->addLinkedResource(store, true);
         stores[i] = store;
         pass->getNode(i)->setRenderCallback(store->getRenderCallback());

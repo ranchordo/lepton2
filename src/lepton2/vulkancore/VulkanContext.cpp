@@ -14,7 +14,6 @@
 using namespace lepton2::vulkancore;
 
 const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
-const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 static void glfwErrorCallback(int code, const char* message) {
     printf("GLFW error, code %d: \"%s\"\n", code, message);
@@ -57,6 +56,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 
 void buildDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& msgCreateInfo) {
     msgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    msgCreateInfo.pNext = nullptr;
     msgCreateInfo.messageSeverity = MSG_SEV_INFO | MSG_SEV_WARN | MSG_SEV_ERROR;
     msgCreateInfo.messageType = MSG_TYPE_GENERAL | MSG_TYPE_VALIDATION | MSG_TYPE_PERFORMANCE;
     msgCreateInfo.pfnUserCallback = debugCallback;
@@ -64,20 +64,27 @@ void buildDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& msgCreate
 }
 
 void VulkanContext::createInstance(VkApplicationInfo appInfo) {
-    glfwSetErrorCallback(&glfwErrorCallback);
+    if (this->window != nullptr) {
+        glfwSetErrorCallback(&glfwErrorCallback);
+    }
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pNext = nullptr;
     createInfo.pApplicationInfo = &appInfo;
 
-    uint32_t glfwExtensionCount;
-    const char** glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = nullptr;
+    if (this->window != nullptr) {
+        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    }
     std::vector<const char*> requiredExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-    if (this->enable_validation_layers) requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    if (this->enableValidationLayers) requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    requiredExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     createInfo.enabledExtensionCount = (uint32_t)requiredExtensions.size();
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-    if (this->enable_validation_layers) {
+    if (this->enableValidationLayers) {
         if (!checkValidationLayerSupport()) {
             throw std::runtime_error("Not all validation layers exist.");
         }
@@ -91,7 +98,7 @@ void VulkanContext::createInstance(VkApplicationInfo appInfo) {
     if (vkCreateInstance(&createInfo, nullptr, &this->instance) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create vulkan instance.");
     }
-    if (this->enable_validation_layers) {
+    if (this->enableValidationLayers) {
         VkDebugUtilsMessengerCreateInfoEXT msgCreateInfo{};
         buildDebugMessengerCreateInfo(msgCreateInfo);
         if (EXTDoProxy(vkCreateDebugUtilsMessengerEXT, instance, &msgCreateInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
@@ -122,22 +129,38 @@ QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device) {
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
-        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            indices.graphicsFamily = i;
+        if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+            indices.graphicsComputeFamily = i;
+        } else if (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+            indices.computeFamily = i;  // Dedicated compute
         }
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &presentSupport);
+        if (this->surface != VK_NULL_HANDLE) {
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &presentSupport);
+        }
         if (presentSupport) {
             indices.presentFamily = i;
         }
-        if (indices.is_complete()) {
+        if (indices.isComplete(this->window != nullptr)) {
             break;
         }
+    }
+    if (!indices.computeFamily.has_value()) {  // Fallback - asynchronous compute not supported
+        indices.computeFamily = indices.graphicsComputeFamily;
     }
     return indices;
 }
 
-bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+const std::vector<const char*> VulkanContext::getRequiredDeviceExtensions() {
+    std::vector<const char*> result;
+    result.push_back(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
+    if (this->window != nullptr) {
+        result.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+    return result;
+}
+
+bool checkDeviceExtensionSupport(VkPhysicalDevice device, const std::vector<const char*> deviceExtensions) {
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -149,8 +172,8 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
     return requiredExtensions.empty();
 }
 
-SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device) {
-    SwapChainSupportDetails details;
+SwapchainSupportDetails VulkanContext::querySwapchainSupport(VkPhysicalDevice device) {
+    SwapchainSupportDetails details;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, this->surface, &details.capabilities);
     uint32_t formatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, this->surface, &formatCount, nullptr);
@@ -171,37 +194,41 @@ int VulkanContext::calculateDeviceScore(VkPhysicalDevice device) {
 #define do_absolute_criterion(namestr, test)                                                                                                        \
     {                                                                                                                                               \
         bool result = isSuitable && (test);                                                                                                         \
-        if (this->print_debug_info) printf(" --> Necessary criterion - %s: %s.\n", namestr, result ? "YES" : (isSuitable ? "NO" : "Not checking")); \
+        if (this->printDebugInfo) printf(" --> Necessary criterion - %s: %s.\n", namestr, result ? "YES" : (isSuitable ? "NO" : "Not checking")); \
         isSuitable = isSuitable && result;                                                                                                          \
     }
-#define do_score_criterion(namestr, weight, value)                                                                                                                \
-    {                                                                                                                                                             \
-        int result = (value);                                                                                                                                     \
-        if (this->print_debug_info) printf(" --> Scored criterion, weight %f - %s: %f --> %f.\n", float(weight), namestr, float(result), float(result * weight)); \
-        totalScore += result * weight;                                                                                                                            \
+#define do_score_criterion(namestr, weight, value)                                                                                                                      \
+    {                                                                                                                                                                   \
+        int result = (value);                                                                                                                                           \
+        if (this->printDebugInfo) printf(" --> Scored criterion, weight %.2f - %s: %.2f --> %.2f.\n", float(weight), namestr, float(result), float(result * weight)); \
+        totalScore += result * weight;                                                                                                                                  \
     }
 
     VkPhysicalDeviceProperties deviceProperties;
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceProperties(device, &deviceProperties);
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-    if (this->print_debug_info) {
+    if (this->printDebugInfo) {
         printf("Considering VkPhysicalDevice \"%s\":\n", deviceProperties.deviceName);
     }
     bool isSuitable = true;
     float totalScore = 0.0;
-    do_absolute_criterion("Adequate queue family support", findQueueFamilies(device).is_complete());
-    do_absolute_criterion("Adequate extention support", checkDeviceExtensionSupport(device));
-    do_absolute_criterion("Adequate swapchain support", this->querySwapChainSupport(device).has_formats_and_present_modes());
+    QueueFamilyIndices qfis = findQueueFamilies(device);
+    do_absolute_criterion("Adequate queue family support", qfis.isComplete(this->window != nullptr));
+    do_absolute_criterion("Adequate extention support", checkDeviceExtensionSupport(device, getRequiredDeviceExtensions()));
+    if (this->window != nullptr) {
+        do_absolute_criterion("Adequate swapchain support", this->querySwapchainSupport(device).has_formats_and_present_modes());
+    }
     do_absolute_criterion("Sampler anisotropy", deviceFeatures.samplerAnisotropy);
     do_absolute_criterion("Independent blending support", deviceFeatures.independentBlend);
     if (isSuitable) {
         do_score_criterion("Is discrete GPU", 10000, int(deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU));
-        do_score_criterion("Image dimension limits", 0.03125, (deviceProperties.limits.maxImageDimension2D));
-    } else if (this->print_debug_info) {
+        do_score_criterion("Image dimension limit", 0.05, (deviceProperties.limits.maxImageDimension2D));
+        do_score_criterion("Dedicated asynchronous compute queue", 2048, int(qfis.isComplete(false) && (qfis.computeFamily != qfis.graphicsComputeFamily)))
+    } else if (this->printDebugInfo) {
         printf(" --> Device is not suitable. Not checking score criteria.\n");
     }
-    if (this->print_debug_info) {
+    if (this->printDebugInfo) {
         printf(" --> Total device score: %d.\n\n", int(totalScore * int(isSuitable)));
     }
 #undef do_absolute_criterion
@@ -228,7 +255,7 @@ void VulkanContext::pickPhysicalDevice() {
     if (this->physicalDevice == VK_NULL_HANDLE) {
         throw std::runtime_error("No suitable GPU found.");
     }
-    if (this->print_debug_info) {
+    if (this->printDebugInfo) {
         printf("Picked physical device \"");
         printDeviceName(physicalDevice);
         printf("\".\n");
@@ -239,13 +266,15 @@ void VulkanContext::createLogicalDevice() {
     QueueFamilyIndices indices = this->findQueueFamilies(this->physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::unordered_set<uint32_t> uniqueQueueFamilies = {
-        indices.graphicsFamily.value(),
-        indices.presentFamily.value()};
+    std::unordered_set<uint32_t> uniqueQueueFamilies;
+    if (indices.graphicsComputeFamily.has_value()) uniqueQueueFamilies.emplace(indices.graphicsComputeFamily.value());
+    if (indices.computeFamily.has_value()) uniqueQueueFamilies.emplace(indices.computeFamily.value());
+    if (indices.presentFamily.has_value()) uniqueQueueFamilies.emplace(indices.presentFamily.value());
     float queuePriorities[1] = {1.0f};
     for (uint32_t queueFamily : uniqueQueueFamilies) {
         VkDeviceQueueCreateInfo queueCreateInfo{};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.pNext = nullptr;
         queueCreateInfo.queueFamilyIndex = queueFamily;
         queueCreateInfo.queueCount = 1;
         queueCreateInfo.pQueuePriorities = queuePriorities;
@@ -258,13 +287,16 @@ void VulkanContext::createLogicalDevice() {
     deviceFeatures.independentBlend = VK_TRUE;
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pNext = nullptr;
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
     createInfo.pEnabledFeatures = &deviceFeatures;
 
+    const std::vector<const char*> deviceExtensions = this->getRequiredDeviceExtensions();
+
     createInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-    if (this->enable_validation_layers) {
+    if (this->enableValidationLayers) {
         createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
         createInfo.ppEnabledLayerNames = validationLayers.data();
     } else {
@@ -273,13 +305,21 @@ void VulkanContext::createLogicalDevice() {
     if (vkCreateDevice(this->physicalDevice, &createInfo, nullptr, &this->device) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create logical device.");
     }
-    vkGetDeviceQueue(this->device, indices.graphicsFamily.value(), 0, &this->vk_queues.graphics);
-    vkGetDeviceQueue(this->device, indices.presentFamily.value(), 0, &this->vk_queues.present);
+    vkGetDeviceQueue(this->device, indices.graphicsComputeFamily.value(), 0, &this->queues.graphics);
+    if (indices.graphicsComputeFamily.value() != indices.computeFamily.value()) {
+        vkGetDeviceQueue(this->device, indices.computeFamily.value(), 0, &this->queues.compute);
+    } else {
+        this->queues.compute = this->queues.graphics;
+    }
+    if (indices.presentFamily.has_value()) {
+        vkGetDeviceQueue(this->device, indices.presentFamily.value(), 0, &this->queues.present);
+    }
 }
 
 void VulkanContext::buildCommandPool(VkCommandPoolCreateFlags flags, uint32_t queueFamilyIndex, VkCommandPool* commandPool) {
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.pNext = nullptr;
     poolInfo.flags = flags;
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     if (vkCreateCommandPool(this->device, &poolInfo, nullptr, commandPool) != VK_SUCCESS) {
@@ -292,59 +332,91 @@ void VulkanContext::buildAllCommandPools() {
     // Normal graphics
     {
         VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        uint32_t queueFamilyIndex = indices.graphicsFamily.value();
-        this->buildCommandPool(flags, queueFamilyIndex, &this->vk_command_pools.normalGraphics);
+        uint32_t queueFamilyIndex = indices.graphicsComputeFamily.value();
+        this->buildCommandPool(flags, queueFamilyIndex, &this->commandPools.normalGraphicsCompute);
     }
     // Transient graphics
     {
         VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-        uint32_t queueFamilyIndex = indices.graphicsFamily.value();
-        this->buildCommandPool(flags, queueFamilyIndex, &this->vk_command_pools.transientGraphics);
+        uint32_t queueFamilyIndex = indices.graphicsComputeFamily.value();
+        this->buildCommandPool(flags, queueFamilyIndex, &this->commandPools.transientGraphicsCompute);
+    }
+
+    if (indices.graphicsComputeFamily.value() != indices.computeFamily.value()) {
+        // Normal compute
+        {
+            VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            uint32_t queueFamilyIndex = indices.computeFamily.value();
+            this->buildCommandPool(flags, queueFamilyIndex, &this->commandPools.normalCompute);
+        }
+        // Transient compute
+        {
+            VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            uint32_t queueFamilyIndex = indices.computeFamily.value();
+            this->buildCommandPool(flags, queueFamilyIndex, &this->commandPools.transientCompute);
+        }
+    } else {
+        this->commandPools.normalCompute = this->commandPools.normalGraphicsCompute;
+        this->commandPools.transientCompute = this->commandPools.transientGraphicsCompute;
     }
 }
 
 void VulkanContext::setRelativePaths(const char* argv0) {
     std::filesystem::path shader_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("shaders");
     std::string shader_location = shader_location_path.string();
-    this->shaders_spirv_load_path = (char*)malloc(shader_location.length() + 1);
-    strcpy(this->shaders_spirv_load_path, shader_location.c_str());
+    this->shaderSpirvLoadPath = (char*)malloc(shader_location.length() + 1);
+    strcpy(this->shaderSpirvLoadPath, shader_location.c_str());
 
     std::filesystem::path asset_location_path = lepton2::utils::getExecutableLocation(argv0, false).append("assets");
     std::string asset_location = asset_location_path.string();
-    this->assets_load_path = (char*)malloc(asset_location.length() + 1);
-    strcpy(this->assets_load_path, asset_location.c_str());
+    this->assetsLoadPath = (char*)malloc(asset_location.length() + 1);
+    strcpy(this->assetsLoadPath, asset_location.c_str());
 }
 
-char* VulkanContext::buildShaderLoadPaths(const char* rel) {
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s.____.spv", this->shaders_spirv_load_path, rel);
+char* VulkanContext::buildShaderLoadPaths(const char* rel, bool compute) {
+    if (compute) {
+        size_t len = snprintf(nullptr, 0, "%s/%s.comp.spv", this->shaderSpirvLoadPath, rel);
+        char* buf = (char*)malloc(sizeof(char) * (len + 1));
+        snprintf(buf, len + 1, "%s/%s.comp.spv", this->shaderSpirvLoadPath, rel);
+        return buf;
+    }
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s.____.spv", this->shaderSpirvLoadPath, rel);
     char* buf = (char*)malloc(sizeof(char) * 2 * (combined_length + 1));
-    snprintf(buf, combined_length + 1, "%s/%s.vert.spv", this->shaders_spirv_load_path, rel);
-    snprintf(buf + combined_length + 1, combined_length + 1, "%s/%s.frag.spv", this->shaders_spirv_load_path, rel);
+    snprintf(buf, combined_length + 1, "%s/%s.vert.spv", this->shaderSpirvLoadPath, rel);
+    snprintf(buf + combined_length + 1, combined_length + 1, "%s/%s.frag.spv", this->shaderSpirvLoadPath, rel);
     return buf;
 }
 
 char* VulkanContext::buildAssetLoadPath(const char* rel) {
-    size_t combined_length = snprintf(nullptr, 0, "%s/%s", this->assets_load_path, rel);
+    size_t combined_length = snprintf(nullptr, 0, "%s/%s", this->assetsLoadPath, rel);
     char* buf = (char*)malloc(sizeof(char) * (combined_length + 1));
-    snprintf(buf, combined_length + 1, "%s/%s", this->assets_load_path, rel);
+    snprintf(buf, combined_length + 1, "%s/%s", this->assetsLoadPath, rel);
     return buf;
 }
 
 void VulkanContext::destroy_back(VulkanContext* ctx) {
-    this->swapChain.destroy(ctx);
+    if (this->window != nullptr) {
+        this->swapchain.destroy(ctx);
+    }
     this->descriptorPoolManager.destroy(ctx);
     this->allocManager.destroy(ctx);
-    if (this->vk_command_pools.normalGraphics != VK_NULL_HANDLE) {
-        vkDestroyCommandPool(this->device, vk_command_pools.normalGraphics, nullptr);
+    if (this->commandPools.normalGraphicsCompute != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(this->device, commandPools.normalGraphicsCompute, nullptr);
     }
-    if (this->vk_command_pools.transientGraphics != VK_NULL_HANDLE) {
-        vkDestroyCommandPool(this->device, vk_command_pools.transientGraphics, nullptr);
+    if (this->commandPools.transientGraphicsCompute != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(this->device, commandPools.transientGraphicsCompute, nullptr);
+    }
+    if (commandPools.normalCompute != VK_NULL_HANDLE && commandPools.normalCompute != commandPools.normalGraphicsCompute) {
+        vkDestroyCommandPool(this->device, commandPools.normalCompute, nullptr);
+    }
+    if (commandPools.transientCompute != VK_NULL_HANDLE && commandPools.transientCompute != commandPools.transientGraphicsCompute) {
+        vkDestroyCommandPool(this->device, commandPools.transientCompute, nullptr);
     }
 
     if (this->device != VK_NULL_HANDLE) {
         vkDestroyDevice(this->device, nullptr);
     }
-    if (enable_validation_layers && debugMessenger != VK_NULL_HANDLE) {
+    if (enableValidationLayers && debugMessenger != VK_NULL_HANDLE) {
         EXTDoVoidProxy(vkDestroyDebugUtilsMessengerEXT, instance, debugMessenger, nullptr);
     }
     if (this->surface != VK_NULL_HANDLE) {
@@ -356,6 +428,6 @@ void VulkanContext::destroy_back(VulkanContext* ctx) {
     if (this->window != nullptr) {
         glfwDestroyWindow(window);
     }
-    free(this->shaders_spirv_load_path);
-    free(this->assets_load_path);
+    free(this->shaderSpirvLoadPath);
+    free(this->assetsLoadPath);
 }
