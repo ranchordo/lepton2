@@ -149,6 +149,7 @@ extern void copyBuffer(VulkanContext* ctx, VulkanBuffer* src, VulkanBuffer* dst,
                        VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
 extern VkSemaphore createGenericSemaphore(VulkanContext* ctx);
 extern VkFence createGenericFence(VulkanContext* ctx, bool signaled);
+extern void fillRenderTargetArray(VulkanContext* ctx, RenderTargetImageCreationInfo* rticInfo, ImageArray* array, VkExtent2D extent, uint32_t multiplicity);
 extern void submitDebugMessage(VulkanContext* ctx, const char* msg, VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagBitsEXT type);
 
 }  // namespace lepton2::vulkancore

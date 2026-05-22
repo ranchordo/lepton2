@@ -18,7 +18,6 @@ struct SwapchainFrame {
 class Swapchain : public DeletableVulkanResource {
    public:    
     SwapchainFrame getFrame(VulkanContext* ctx, VkSemaphore semaphore);
-    void updateViewportScissor(VkCommandBuffer commandBuffer);
 
     void querySwapchain(VulkanContext* ctx);
     void buildSwapchain(VulkanContext* ctx);

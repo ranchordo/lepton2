@@ -10,8 +10,10 @@ class TextureComponent : public DeletableVulkanResource {
     TextureComponent(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height, VkFormat format);
     TextureComponent(VulkanContext* ctx, const char* filename, VkFormat format);
     TextureComponent(VulkanImage* image) { this->image = image; }
+    TextureComponent(ImageArray* imageArray) { this->imageArray = imageArray; }
 
     VulkanImage* image = nullptr;
+    ImageArray* imageArray = nullptr;
     void destroy_back(VulkanContext* ctx) override;
 
    private:

@@ -53,6 +53,7 @@ int demo_compute_postprocess(int argc, char** argv) {
     ctx->swapchain.setPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR);  // Just for debugging to avoid limiting framerate
     ctx->swapchain.setSurfaceFormat({VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR});
     ctx->swapchain.setUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    ctx->swapchain.buildSwapchain(ctx);
 
     // Render pass structure:
 
@@ -61,7 +62,6 @@ int demo_compute_postprocess(int argc, char** argv) {
 
     RenderPass* renderPass = new RenderPass(ctx, {node}, 2);
     renderPass->addLinkedResource(node, true);
-    ctx->swapchain.buildSwapchain(ctx);
 
     ImageArray* renderContainer1 = new ImageArray();  // To store render output
     ImageArray* renderContainer2 = new ImageArray();  // To store x-blurred step
@@ -71,6 +71,10 @@ int demo_compute_postprocess(int argc, char** argv) {
     // Main loop setup:
 
     VulkanLoop mainLoop(renderPass->getResourceMultiplicity());
+
+    // Framerate monitor
+    mainLoop.loopModifiers.push_back(new SimpleFramerateMonitor(0.5, nullptr));
+    mainLoop.addLinkedResource(mainLoop.loopModifiers[mainLoop.loopModifiers.size() - 1], true);
 
     // Loop modifiers to handle rendering and re-creation of render targets:
     RenderTargetImageCreationInfo rticInfo = defaultColorAttachmentRTIC(termConfig.attachmentDescription.format);
@@ -209,17 +213,7 @@ int demo_compute_postprocess(int argc, char** argv) {
 
     // Loop!
     mainLoop.initialize(ctx);
-    uint32_t frame_count = 0;
-    while (!mainLoop.shouldLoopTerminate(ctx)) {
-        auto time_point = startTiming();
-        mainLoop.process(ctx);
-        if (frame_count % 1000 == 0) {
-            double fp = getElapsedSeconds(time_point);
-            printf("Interval (μs): %lf\n", fp * 1000000);
-            printf("Framerate (fps): %lf\n", 1 / fp);
-        }
-        frame_count++;
-    }
+    while (!mainLoop.shouldLoopTerminate(ctx)) mainLoop.process(ctx);
     mainLoop.terminateLoop(ctx);
 
     ctx->destroy(ctx);

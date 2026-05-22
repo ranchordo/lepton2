@@ -3,6 +3,7 @@
 #include "VulkanContext.h"
 
 using namespace lepton2::vulkancore;
+using namespace lepton2::utils;
 using namespace lepton2::vulkancore::loopmodifiers;
 
 void InFlightResources::create(VulkanContext* ctx) {
@@ -45,22 +46,13 @@ void SimpleRenderPass::renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, ui
     this->renderPass->end(buffer);
 }
 void SimpleRenderPass::onSwapchainRebuild(VulkanContext* ctx) {
+    if (targetContainer == nullptr) return;
     this->renderPass->destroyFramebuffers(ctx);
     this->renderPass->generateFramebuffers(ctx, &targetContainer->images, targetContainer->extent);
 }
 
 void ImageArraySwapchainRebuild::onSwapchainRebuild(VulkanContext* ctx) {
-    for (uint32_t i = 0; i < array->images.size(); i++) {
-        array->images[i]->destroy(ctx);
-        delete array->images[i];
-    }
-
-    array->images.resize(multiplicity);
-    for (uint32_t i = 0; i < multiplicity; i++) {
-        array->images[i] = new VulkanImage();
-        createRenderTarget(ctx, *extentPtr, &rticInfo, array->images[i]);
-    }
-    array->extent = *extentPtr;
+    fillRenderTargetArray(ctx, &rticInfo, array, *extentPtr, multiplicity);
 }
 
 SimpleComputePass::SimpleComputePass(VulkanContext* ctx, const char* shaderName, ImageArray* inputContainer, ImageArray* outputContainer, VkExtent2D localSize,
@@ -148,6 +140,24 @@ void SimpleComputePass::onSwapchainRebuild(VulkanContext* ctx) {
     if (dsa2 != nullptr) dsa2->updateAllDescriptorSets(ctx);
 }
 
+void SimpleFramerateMonitor::preRender(VulkanContext* ctx, uint32_t frameIndex) {
+    if (this->frameCount == UINT32_MAX) {
+        this->frameCount = 0;
+        this->timePoint = startTiming();
+        if (this->ptr != nullptr) *(this->ptr) = 0;
+        return;
+    }
+    this->frameCount++;
+    double diff = getElapsedSeconds(this->timePoint);
+    if (diff >= this->period) {
+        double fr = ((double)frameCount) / diff;
+        if (this->ptr != nullptr) *(this->ptr) = fr;
+        printf("SimpleFramerateMonitor: average framerate %.3lf over %u frames\n", fr, frameCount);
+        this->frameCount = 0;
+        this->timePoint = startTiming();
+    }
+}
+
 VulkanLoop::VulkanLoop(uint32_t inFlightFrames) {
     this->inFlightResources.resize(inFlightFrames);
 }
@@ -197,8 +207,6 @@ void VulkanLoop::process(VulkanContext* ctx) {
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("Failed to begin recording command buffer.");
     }
-
-    ctx->swapchain.updateViewportScissor(commandBuffer);
 
     for (VulkanLoopModifier* loopmod : this->loopModifiers) {
         loopmod->renderCmd(commandBuffer, inFlightFrameCount, swapchainFrame.index);

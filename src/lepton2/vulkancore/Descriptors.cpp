@@ -101,9 +101,8 @@ StorageImageDescriptor::StorageImageDescriptor(VulkanContext* ctx, DescriptorInf
 DescriptorWriteInfoContainer StorageImageDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
     DescriptorWriteInfoContainer ret{};
     ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    VulkanImage* target = nullptr;
-    target = this->images->images[this->index];
-    
+
+    VulkanImage* target = this->images->images[this->index % this->images->images.size()];
     ret.imageInfo.imageView = target->imageView;
 
     ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -126,8 +125,13 @@ ImageSamplerDescriptor::ImageSamplerDescriptor(VulkanContext* ctx, DescriptorInf
 DescriptorWriteInfoContainer ImageSamplerDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
     DescriptorWriteInfoContainer ret;
     ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
     VulkanImage* target = nullptr;
     target = this->container->components[this->componentIndex]->image;
+    if (this->container->components[this->componentIndex]->imageArray != nullptr) {
+        ImageArray* array = this->container->components[this->componentIndex]->imageArray;
+        target = array->images[imageIndex % array->images.size()];
+    }
 
     ret.imageInfo.imageView = target->imageView;
     ret.imageInfo.sampler = this->container->textureSampler;

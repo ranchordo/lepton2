@@ -6,7 +6,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 
 layout (set = 0, binding = 1, rgba16f) uniform image2D renderTarget;
-layout (set = 0, binding = 2, rgba8) uniform image2D swapchainOutput;
+layout (set = 0, binding = 2, rgba16f) uniform image2D swapchainOutput;
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -33,5 +33,5 @@ void main() {
 
     pixel /= 8.0;
 
-    imageStore(swapchainOutput, coord, vec4(pow(pixel, vec3(1 / 2.2)), 1));
+    imageStore(swapchainOutput, coord, vec4(pixel, 1));
 }

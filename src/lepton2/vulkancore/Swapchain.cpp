@@ -152,21 +152,6 @@ void Swapchain::destroy_back(VulkanContext* ctx) {
     this->swapchain = VK_NULL_HANDLE;
 }
 
-void Swapchain::updateViewportScissor(VkCommandBuffer commandBuffer) {
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)extent.width;
-    viewport.height = (float)extent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = extent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-}
-
 SwapchainFrame Swapchain::getFrameInternal(VulkanContext* ctx, VkSemaphore semaphore) {
     SwapchainFrame frame;
     frame.result = vkAcquireNextImageKHR(ctx->device, swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &frame.index);

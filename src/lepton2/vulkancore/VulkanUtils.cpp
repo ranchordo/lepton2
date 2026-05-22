@@ -241,6 +241,20 @@ VkFence createGenericFence(VulkanContext* ctx, bool signaled) {
     return ret;
 }
 
+void fillRenderTargetArray(VulkanContext* ctx, RenderTargetImageCreationInfo* rticInfo, ImageArray* array, VkExtent2D extent, uint32_t multiplicity) {
+    for (uint32_t i = 0; i < array->images.size(); i++) {
+        array->images[i]->destroy(ctx);
+        delete array->images[i];
+    }
+
+    array->images.resize(multiplicity);
+    for (uint32_t i = 0; i < multiplicity; i++) {
+        array->images[i] = new VulkanImage();
+        createRenderTarget(ctx, extent, rticInfo, array->images[i]);
+    }
+    array->extent = extent;
+}
+
 void submitDebugMessage(VulkanContext* ctx, const char* msg, VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagBitsEXT type) {
     VkDebugUtilsMessengerCallbackDataEXT callbackData{};
     callbackData.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT;

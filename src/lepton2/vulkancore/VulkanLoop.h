@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../utils/LeptonUtils.h"
 #include "RenderPass.h"
 #include "VulkanUtils.h"
 
@@ -76,6 +77,22 @@ class SimpleComputePass : public VulkanLoopModifier {
     VkExtent2D localSize;
     VkImageLayout outputLayout;
     bool swapchainIndexing;
+};
+class SimpleFramerateMonitor : public VulkanLoopModifier {
+   public:
+    SimpleFramerateMonitor(double updatePeriodSeconds, double* frameratePtr) {
+        this->period = updatePeriodSeconds;
+        this->ptr = frameratePtr;
+    }
+    void preRender(VulkanContext* ctx, uint32_t frameIndex) override;
+    void setUpdatePeriod(double period) { this->period = period; }
+    void setFrameratePtr(double* ptr) { this->ptr = ptr; }
+
+   private:
+    double period;
+    uint32_t frameCount = UINT32_MAX;
+    utils::lepton2_time_point timePoint;
+    double* ptr;
 };
 }  // namespace loopmodifiers
 
