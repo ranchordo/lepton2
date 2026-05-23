@@ -7,13 +7,15 @@ BASELDFLAGS = -lglfw -lvulkan
 
 BASE_OUTPUT ?= lepton2_main
 
+GLSLC ?= glslc
+
 SOURCES = $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 OBJECTS = $(subst src,build/o,$(SOURCES:.cpp=.o))
 
 SHADER_SOURCES = $(wildcard shaders_src/*.comp shaders_src/*/*.comp shaders_src/*/*/*.comp shaders_src/*.frag shaders_src/*/*.frag shaders_src/*/*/*.frag shaders_src/*.vert shaders_src/*/*.vert shaders_src/*/*/*.vert)
 SHADER_SPIRV = $(subst shaders_src,build/output/shaders,$(addsuffix .spv,$(SHADER_SOURCES)))
 
-build-base: $(OBJECTS)
+build_base: $(OBJECTS)
 	mkdir -p $(shell dirname "$(OUTPUT)")
 	clang++ $(CFLAGS) -o $(OUTPUT) $(OBJECTS) $(LDFLAGS)
 
@@ -25,7 +27,7 @@ $(OBJECTS): build/o/%.o: src/%.cpp
 $(SHADER_SPIRV): build/output/shaders/%.spv: shaders_src/%
 	@echo Compiling $< to $@...
 	mkdir -p $(shell dirname "$@")
-	glslc $< -o $@
+	$(GLSLC) $< -o $@
 
 all_shaders: $(SHADER_SPIRV)
 	@echo All shaders built.
@@ -54,7 +56,7 @@ clean_resources:
 test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV -g
 test: LDFLAGS = $(BASELDFLAGS)
 test: OUTPUT = build/output/$(BASE_OUTPUT)
-test: build-base assets
+test: build_base assets
 	@echo Launching $(OUTPUT)...
 	@./$(OUTPUT) $(TESTARGS)
 
@@ -68,7 +70,7 @@ build_mac_extract_sysroot:
 build_mac: CFLAGS = $(BASECFLAGS) -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
 build_mac: LDFLAGS = $(BASELDFLAGS) -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
 build_mac: OUTPUT = build/output/$(BASE_OUTPUT)
-build_mac: clean build_mac_extract_sysroot build-base assets
+build_mac: clean build_mac_extract_sysroot build_base assets
 	mkdir -p build/output/vulkan/icd.d
 	cp build-resources/MoltenVK_icd.json build/output/vulkan/icd.d/
 	cp build-resources/libMoltenVK.dylib build/output/libMoltenVK.dylib
@@ -80,7 +82,7 @@ build_mac: clean build_mac_extract_sysroot build-base assets
 build_linux: CFLAGS = $(BASECFLAGS)
 build_linux: LDFLAGS = $(BASELDFLAGS)
 build_linux: OUTPUT = build/output/$(BASE_OUTPUT)
-build_linux: clean build-base assets
+build_linux: clean build_base assets
 	@echo "Build completed in build/output/."
 
 # Windows build #
@@ -97,5 +99,5 @@ build_win_extract_sysroot:
 build_win: CFLAGS = $(BASECFLAGS) -target $(WIN_TARGET) -Ibuild/win_vulkan_sdk/Include -I$(WIN_GCCDIR)/include/c++ -I$(WIN_GCCDIR)/include/c++/$(WIN_TARGET) --sysroot=$(WIN_SYSROOT)
 build_win: LDFLAGS = -Lbuild/win_vulkan_sdk/Lib -L$(WIN_GCCDIR) -lvulkan-1 -lglfw3 -lgdi32 -lkernel32 -luser32 -lshell32 -static -static-libgcc -static-libstdc++
 build_win: OUTPUT = build/output/$(BASE_OUTPUT).exe
-build_win: clean build_win_extract_sysroot build-base assets
+build_win: clean build_win_extract_sysroot build_base assets
 	@echo "Build completed in build/output/."

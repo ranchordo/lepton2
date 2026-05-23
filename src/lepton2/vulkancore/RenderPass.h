@@ -44,7 +44,7 @@ class RenderPass : public DeletableVulkanResource {
     void end(VkCommandBuffer commandBuffer);
 
     // Initial configuration
-    void generateFramebuffers(VulkanContext* ctx, std::vector<VulkanImage*>* final_images, VkExtent2D extent);
+    void generateFramebuffers(VulkanContext* ctx, ImageArray* finalImages);
     void destroyFramebuffers(VulkanContext* ctx);
     void setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
     void setSuperpassLayouts(std::vector<VkDescriptorSetLayout> superpassLayouts);

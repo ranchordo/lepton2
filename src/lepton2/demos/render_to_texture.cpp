@@ -73,7 +73,7 @@ int demo_render_to_texture(int argc, char** argv) {
     VkExtent2D firstRenderExtent = {256, 256};
     fillRenderTargetArray(ctx, &renderTargetInfo, renderContainer, firstRenderExtent, renderPass->getResourceMultiplicity());
 
-    renderPass->generateFramebuffers(ctx, &renderContainer->images, firstRenderExtent);
+    renderPass->generateFramebuffers(ctx, renderContainer);
     renderPass->addLinkedResource(node, true);
     renderPass->addLinkedResource(node1, true);
     node->setupSubpassDescriptorSet(ctx, renderPass, {});  // To establish input attachment descriptors
@@ -187,7 +187,7 @@ int demo_render_to_texture(int argc, char** argv) {
     RenderSubpass* pass2_node = new RenderSubpass(ctx, swapchainTermConfig);
     RenderPass* renderPass2 = new RenderPass(ctx, {pass2_node}, renderPass->getResourceMultiplicity());
     renderPass2->addLinkedResource(pass2_node, true);
-    renderPass2->generateFramebuffers(ctx, &ctx->swapchain.getSwapchainImages()->images, ctx->swapchain.getKnownExtent());
+    renderPass2->generateFramebuffers(ctx, ctx->swapchain.getSwapchainImages());
 
     VulkanLoopModifier* loopmod2 = new SimpleRenderPass(renderPass2, ctx->swapchain.getSwapchainImages(), true);
     mainLoop.loopModifiers.push_back(loopmod2);

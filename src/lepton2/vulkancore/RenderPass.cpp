@@ -231,16 +231,16 @@ void RenderPass::destroy_back(VulkanContext* ctx) {
     vkDestroyPipelineLayout(ctx->device, dummyPassLayout, nullptr);
 }
 
-void RenderPass::generateFramebuffers(VulkanContext* ctx, std::vector<VulkanImage*>* finalImages, VkExtent2D extent) {
-    this->targets.resize(finalImages->size());
+void RenderPass::generateFramebuffers(VulkanContext* ctx, ImageArray* finalImages) {
+    this->targets.resize(finalImages->images.size());
     for (uint32_t i = 0; i < targets.size(); i++) {
         Framebuffer* nfb = new Framebuffer();
         for (RenderTargetImageCreationInfo rticInfo : this->rticInfos) {
             if (rticInfo.isTerminal) {
-                nfb->addImage(finalImages->at(i));
+                nfb->addImage(finalImages->images[i]);
             } else {
                 VulkanImage* rtImage = new VulkanImage();
-                createRenderTarget(ctx, extent, &rticInfo, rtImage);
+                createRenderTarget(ctx, finalImages->extent, &rticInfo, rtImage);
                 nfb->addImage(rtImage);
                 this->renderTargetImages.push_back(rtImage);
                 if (rticInfo.aspectFlags & VK_IMAGE_ASPECT_DEPTH_BIT) {
@@ -250,7 +250,7 @@ void RenderPass::generateFramebuffers(VulkanContext* ctx, std::vector<VulkanImag
                 }
             }
         }
-        nfb->buildFramebuffer(ctx, renderPass, extent);
+        nfb->buildFramebuffer(ctx, renderPass, finalImages->extent);
         this->targets[i] = nfb;
     }
 

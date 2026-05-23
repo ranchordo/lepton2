@@ -48,7 +48,7 @@ void SimpleRenderPass::renderCmd(VkCommandBuffer buffer, uint32_t frameIndex, ui
 void SimpleRenderPass::onSwapchainRebuild(VulkanContext* ctx) {
     if (targetContainer == nullptr) return;
     this->renderPass->destroyFramebuffers(ctx);
-    this->renderPass->generateFramebuffers(ctx, &targetContainer->images, targetContainer->extent);
+    this->renderPass->generateFramebuffers(ctx, targetContainer);
 }
 
 void ImageArraySwapchainRebuild::onSwapchainRebuild(VulkanContext* ctx) {

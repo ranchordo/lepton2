@@ -64,7 +64,7 @@ int demo_simple_subpasses(int argc, char** argv) {
     node->requestDepthAsInput(1);
 
     RenderPass* renderPass = new RenderPass(ctx, {node, node1}, 2);
-    renderPass->generateFramebuffers(ctx, &ctx->swapchain.getSwapchainImages()->images, ctx->swapchain.getKnownExtent());
+    renderPass->generateFramebuffers(ctx, ctx->swapchain.getSwapchainImages());
     renderPass->addLinkedResource(node, true);
     renderPass->addLinkedResource(node1, true);
 
