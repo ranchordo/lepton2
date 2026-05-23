@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Build the site
-      run: |
-        mkdir docs/site
-        echo '<h1>Hello, world!</h1>' > docs/site/index.html
+    - name: Install dependencies
+      run: sudo apt install doxygen; sudo npm install moxygen -g; sudo pip3 install mkdocs-material
+    - name: Make documentation
+      run: make documentation
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:

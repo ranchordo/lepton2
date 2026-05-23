@@ -104,8 +104,10 @@ build_win: clean build_win_extract_sysroot build_base assets
 
 
 clean_documentation:
-	rm -rf docs/doxygen
-	rm -rf doxygen_xml
+	rm -rf docs/docs_root/doxygen
+	rm -rf docs/doxygen_xml
+	rm -rf docs/site
+	rm -f docs/mkdocs.yml
 
 documentation: clean_documentation
 	doxygen docs/Doxyfile
