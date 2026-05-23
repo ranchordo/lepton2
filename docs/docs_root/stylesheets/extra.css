@@ -1,0 +1,10 @@
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary .md-nav__list {
+      width: 14rem;
+    }
+
+  .md-sidebar--primary {
+      width: 16rem;
+      left: -16rem;
+  }
+}

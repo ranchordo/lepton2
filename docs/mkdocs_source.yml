@@ -1,0 +1,14 @@
+site_name: Lepton2 Documentation
+docs_dir: docs_root
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: blue
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - 'index.md'
+  - '__doxygen_nav_stub__'

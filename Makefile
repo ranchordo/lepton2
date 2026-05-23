@@ -101,3 +101,14 @@ build_win: LDFLAGS = -Lbuild/win_vulkan_sdk/Lib -L$(WIN_GCCDIR) -lvulkan-1 -lglf
 build_win: OUTPUT = build/output/$(BASE_OUTPUT).exe
 build_win: clean build_win_extract_sysroot build_base assets
 	@echo "Build completed in build/output/."
+
+
+clean_documentation:
+	rm -rf docs/doxygen
+	rm -rf doxygen_xml
+
+documentation: clean_documentation
+	doxygen docs/Doxyfile
+	moxygen docs/doxygen_xml -c -H -o docs/docs_root/doxygen/%s.md
+	python3 docs/process_doxygen.py
+	mkdocs build -f docs/mkdocs.yml

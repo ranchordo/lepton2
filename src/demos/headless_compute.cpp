@@ -1,13 +1,13 @@
-#include "../graphics/GraphicalPresets.h"
-#include "../vulkancore/ObjectData.h"
-#include "../vulkancore/Pipelines.h"
-#include "../vulkancore/RenderPass.h"
-#include "../vulkancore/Textures.h"
-#include "../vulkancore/VulkanContext.h"
-#include "../vulkancore/VulkanLoop.h"
-#include "../vulkancore/VulkanMemory.h"
-#include "../vulkancore/VulkanUtils.h"
-#include "../utils/LeptonUtils.h"
+#include "../lepton2/graphics/GraphicalPresets.h"
+#include "../lepton2/vulkancore/ObjectData.h"
+#include "../lepton2/vulkancore/Pipelines.h"
+#include "../lepton2/vulkancore/RenderPass.h"
+#include "../lepton2/vulkancore/Textures.h"
+#include "../lepton2/vulkancore/VulkanContext.h"
+#include "../lepton2/vulkancore/VulkanLoop.h"
+#include "../lepton2/vulkancore/VulkanMemory.h"
+#include "../lepton2/vulkancore/VulkanUtils.h"
+#include "../lepton2/utils/LeptonUtils.h"
 
 using namespace lepton2::vulkancore;
 using namespace lepton2::vulkancore::loopmodifiers;

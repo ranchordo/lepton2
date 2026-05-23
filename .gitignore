@@ -1,3 +1,9 @@
+.vscode
+
 build
 shaders_build
-.vscode
+
+docs/docs_root/doxygen
+docs/doxygen_xml
+docs/mkdocs.yml
+docs/site
