@@ -21,6 +21,12 @@ jobs:
     - name: Use update alternatives to provide clang++-17
       run: sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 1
     - name: Download Vulkan SDK
-      run: curl 'https://vulkan.lunarg.com/sdk/files.json' | python3 -c "import sys,json; data = json.loads(sys.stdin.read()); nm = lambda data: list(data['linux'].keys())[0]; print(f\"{'https://sdk.lunarg.com/sdk/download/'}{nm(data)}/linux/{data['linux'][nm(data)]['files'][0]['file_name']}\")" | wget -i - && tar -xf $(python3 -c "import glob; print(glob.glob('vulkansdk*.tar.xz')[0])") --strip-components=2 --wildcards "*/x86_64/bin/*"
+      run: |
+        curl $(curl "https://vulkan.lunarg.com/sdk/files.json" | python3 -c "
+        import sys,json
+        data = json.loads(sys.stdin.read())
+        nm = lambda data: list(data['linux'].keys())[0]
+        print(f\"{'https://sdk.lunarg.com/sdk/download/'}{nm(data)}/linux/{data['linux'][nm(data)]['files'][0]['file_name']}\")
+        ") | tar -xJ --strip-components=2 --wildcards "*/x86_64/bin/*"
     - name: Make
       run: make GLSLC="bin/glslc" build_linux
