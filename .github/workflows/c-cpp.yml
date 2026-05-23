@@ -29,4 +29,4 @@ jobs:
         print(f\"{'https://sdk.lunarg.com/sdk/download/'}{nm(data)}/linux/{data['linux'][nm(data)]['files'][0]['file_name']}\")
         ") | tar -xJ --strip-components=2 --wildcards "*/x86_64/bin/*"
     - name: Make
-      run: make GLSLC="bin/glslc" build_linux
+      run: make -j build_linux GLSLC="bin/glslc"
