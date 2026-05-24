@@ -25,8 +25,8 @@ static std::vector<SimplePresetVertex> screenVertices = {
 static std::vector<uint32_t> screenIndices = {1, 0, 3, 1, 3, 2};
 
 struct UniformBufferObject {
-    uint maxdisp;
-    uint seed = 0;
+    uint32_t maxdisp;
+    uint32_t seed = 0;
 };
 
 int demo_compute_postprocess(int argc, char** argv) {
@@ -135,7 +135,7 @@ int demo_compute_postprocess(int argc, char** argv) {
         }
         void preRender(VulkanContext* ctx, uint32_t frameIndex) override {
             float disp_multiplier = (2.f + cosf(2.f * M_PI * getElapsedSeconds(start))) / 3.f;
-            ubo->maxdisp = 2 * (uint)(0.1f * windowSize->height * disp_multiplier);
+            ubo->maxdisp = 2 * (uint32_t)(0.1f * windowSize->height * disp_multiplier);
             ubo->seed++;
         }
 

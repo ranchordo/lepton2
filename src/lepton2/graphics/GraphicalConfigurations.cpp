@@ -48,7 +48,7 @@ GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfigurati
         dsl.push_back(newConfiguration->layoutReference->descriptorSetLayout);
     }
     GraphicsPipelineInfo newPipelineInfo(dsl, constraints);
-    newConfiguration->pipeline = new GraphicsPipeline(ctx, this->parent, renderState->getRenderPass(), newPipelineInfo);
+    newConfiguration->pipeline = new GraphicsPipeline(ctx, this->parent, renderState, newPipelineInfo);
     return newConfiguration;
 }
 

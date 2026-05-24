@@ -5,6 +5,7 @@
 #include "VulkanUtils.h"
 
 namespace lepton2::vulkancore {
+class RenderPass;
 class RenderSubpass;
 
 //! Constraints for creating or matching graphics pipelines.
@@ -50,7 +51,7 @@ struct GraphicsPipelineInfo {
 class GraphicsPipeline : public DeletableVulkanResource {
    public:
     GraphicsPipeline(VulkanContext* ctx, RenderSubpass* node,
-                     VkRenderPass renderPass, const GraphicsPipelineInfo& cInfo);
+                     RenderPass* renderPass, const GraphicsPipelineInfo& cInfo);
     void bind(VkCommandBuffer commandBuffer);
     VkPipeline getPipeline() { return this->pipeline; }
     static void bindDescriptorSet(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout,

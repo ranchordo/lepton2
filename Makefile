@@ -3,7 +3,6 @@
 # Base build procedure #
 
 BASECFLAGS = -std=c++17 -O0
-BASELDFLAGS = -lglfw -lvulkan
 
 BASE_OUTPUT ?= lepton2_main
 
@@ -54,7 +53,7 @@ clean_resources:
 # Test native build #
 
 test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV -g
-test: LDFLAGS = $(BASELDFLAGS)
+test: LDFLAGS = -lglfw -lvulkan
 test: OUTPUT = build/output/$(BASE_OUTPUT)
 test: build_base assets
 	@echo Launching $(OUTPUT)...
@@ -67,8 +66,8 @@ build_mac_extract_sysroot:
 	mkdir -p build
 	tar -xf build-resources/osx_sysroot.tar.gz -C build/
 
-build_mac: CFLAGS = $(BASECFLAGS) -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
-build_mac: LDFLAGS = $(BASELDFLAGS) -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
+build_mac: CFLAGS = $(BASECFLAGS) -Ibuild/osx_sysroot/usr/include -target arm64-apple-macos13 --sysroot build/osx_sysroot -stdlib=libc++ -mmacosx-version-min=13.0
+build_mac: LDFLAGS = -lglfw -lvulkan -fuse-ld=lld -Lbuild-resources -Wl,-rpath,.
 build_mac: OUTPUT = build/output/$(BASE_OUTPUT)
 build_mac: clean build_mac_extract_sysroot build_base assets
 	mkdir -p build/output/vulkan/icd.d
@@ -80,7 +79,7 @@ build_mac: clean build_mac_extract_sysroot build_base assets
 # Linux build #
 
 build_linux: CFLAGS = $(BASECFLAGS)
-build_linux: LDFLAGS = $(BASELDFLAGS)
+build_linux: LDFLAGS = -lglfw -lvulkan
 build_linux: OUTPUT = build/output/$(BASE_OUTPUT)
 build_linux: clean build_base assets
 	@echo "Build completed in build/output/."

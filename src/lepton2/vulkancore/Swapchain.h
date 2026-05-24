@@ -50,6 +50,7 @@ class Swapchain : public DeletableVulkanResource {
         VkSurfaceFormatKHR surfaceFormat;
         VkPresentModeKHR presentMode;
         VkSurfaceTransformFlagBitsKHR currentTransform;
+        VkCompositeAlphaFlagsKHR supportedAlpha;
         uint32_t imageCount = 0;
     } queryResults;
 

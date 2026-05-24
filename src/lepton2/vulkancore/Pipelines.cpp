@@ -65,7 +65,7 @@ VkShaderModule GraphicsPipeline::buildShaderModule(VulkanContext* ctx, const std
     return shaderModule;
 }
 
-GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderSubpass* node, VkRenderPass renderPass,
+GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderSubpass* node, RenderPass* renderPass,
                                    const GraphicsPipelineInfo& cInfo) : creationConstraints(cInfo.constraints) {
     char* buf = ctx->buildShaderLoadPaths(cInfo.constraints.shaderName, false);
     size_t vcodelen = 0;
@@ -145,7 +145,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderSubpass* node, VkRe
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.pNext = nullptr;
     multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = cInfo.constraints.samples;
+    multisampling.rasterizationSamples = renderPass->getDepthStencilSamples();
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr;
     multisampling.alphaToCoverageEnable = VK_FALSE;
@@ -195,7 +195,7 @@ GraphicsPipeline::GraphicsPipeline(VulkanContext* ctx, RenderSubpass* node, VkRe
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.renderPass = renderPass->getRenderPass();
     pipelineInfo.subpass = node->getSubpassIndex();
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;

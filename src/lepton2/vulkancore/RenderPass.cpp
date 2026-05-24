@@ -44,6 +44,7 @@ RenderSubpass::RenderSubpass(VulkanContext* ctx, TerminatingSubpassConfig config
     info.rticInfo = rticInfo;
 
     this->colorAttachments.push_back(info);
+    this->resolveAttachments.push_back({false, {}});
 }
 
 ColorAttachmentInfo* RenderSubpass::addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear) {
@@ -54,7 +55,7 @@ ColorAttachmentInfo* RenderSubpass::addColorAttachment(RenderTargetImageCreation
     VkAttachmentDescription desc{};
     desc.format = rticInfo.format;
     desc.samples = rticInfo.samples;
-    desc.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+    desc.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -65,7 +66,29 @@ ColorAttachmentInfo* RenderSubpass::addColorAttachment(RenderTargetImageCreation
     info.rticInfo = rticInfo;
 
     this->colorAttachments.push_back(info);
+    this->resolveAttachments.push_back({false, {}, {}});
     return &this->colorAttachments.at(this->colorAttachments.size() - 1);
+}
+
+void RenderSubpass::addResolveAttachment(RenderTargetImageCreationInfo rticInfo, uint32_t index, VkImageLayout finalLayout) {
+    VkAttachmentDescription desc{};
+    desc.format = rticInfo.format;
+    desc.samples = rticInfo.samples;
+    desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    desc.finalLayout = finalLayout;
+    rticInfo.isTerminal = false;
+    this->resolveAttachments[index] = {true, rticInfo, desc};
+}
+
+void RenderSubpass::addResolveAttachment(TerminatingSubpassConfig config, uint32_t index) {
+    RenderTargetImageCreationInfo rticInfo{};
+    rticInfo.isTerminal = true;
+    rticInfo.blendState = config.blendState;
+    this->resolveAttachments[index] = {true, rticInfo, config.attachmentDescription};
 }
 
 void RenderSubpass::connectFromNode(RenderSubpass* src, uint32_t color_output, uint32_t inputAttachmentIndex) {
@@ -349,8 +372,9 @@ static void addSubpassDependency(std::vector<VkSubpassDependency>& subpassDepend
     subpassDependencies.push_back(dependency);
 }
 
-RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _nodes, uint32_t _resourceMultiplicity) {
+RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _nodes, uint32_t _resourceMultiplicity, VkSampleCountFlagBits depthStencilSamples) {
     this->resourceMultiplicity = _resourceMultiplicity;
+    this->depthStencilSamples = depthStencilSamples;
 
     // Subpass wrangling
     std::vector<RenderSubpass*> orderedNodes;
@@ -367,8 +391,8 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
         this->nodes[i]->nodeIndex = i;
     }
 
-    if (numTerminatingNodes != 1) {
-        throw std::runtime_error("RenderPasses must contain exactly one terminating node.");
+    if (numTerminatingNodes > 1) {
+        throw std::runtime_error("RenderPasses may not contain more than one terminating node.");
     }
 
     // Initialize attachments
@@ -377,7 +401,7 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
     // Depth/stencil creation
     RenderTargetImageCreationInfo depthStencilCreationInfo{};
     depthStencilCreationInfo.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    depthStencilCreationInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthStencilCreationInfo.samples = depthStencilSamples;
     depthStencilCreationInfo.imageTiling = VK_IMAGE_TILING_OPTIMAL;
     depthStencilCreationInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     depthStencilCreationInfo.memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -405,6 +429,7 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
     for (uint32_t nodeidx = 0; nodeidx < this->nodes.size(); nodeidx++) {
         RenderSubpass* node = this->nodes[nodeidx];
         node->subpassInfo.colorAttachmentReferences.resize(node->colorAttachments.size());
+        node->subpassInfo.resolveAttachmentReferences.resize(node->colorAttachments.size());
         for (uint32_t i = 0; i < node->colorAttachments.size(); i++) {
             node->subpassInfo.colorAttachmentReferences[i].attachment = attachments.size();
             node->subpassInfo.colorAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -413,6 +438,18 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
             this->rticInfos.push_back(node->colorAttachments[i].rticInfo);
             this->clearValuePtrs.push_back(&node->colorAttachments[i].clearValue);
             attachments.push_back(node->colorAttachments[i].desc);
+
+            node->subpassInfo.resolveAttachmentReferences[i].attachment = VK_ATTACHMENT_UNUSED;
+            node->subpassInfo.resolveAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            if (node->resolveAttachments[i].filled) {
+                node->subpassInfo.resolveAttachmentReferences[i].attachment = attachments.size();
+                node->subpassInfo.resolveAttachmentReferences[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                node->resolveAttachments[i].rticInfo.nodeidx = nodeidx;
+                node->resolveAttachments[i].rticInfo.colorAttachmentIdx = i;
+                this->rticInfos.push_back(node->resolveAttachments[i].rticInfo);
+                this->clearValuePtrs.push_back(&node->colorAttachments[i].clearValue); // Needed to get correct indexing
+                attachments.push_back(node->resolveAttachments[i].desc);
+            }
         }
         node->subpassInfo.depthStencilAttachmentReference.attachment = depthStencilAttachmentIndex;
         if (node->depthInputRequest == UINT32_MAX) {
@@ -429,8 +466,9 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
         RenderSubpass* node = this->nodes[i];
         VkSubpassDescription subpassDescription{};
         subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpassDescription.colorAttachmentCount = node->colorAttachments.size();
+        subpassDescription.colorAttachmentCount = node->subpassInfo.colorAttachmentReferences.size();
         subpassDescription.pColorAttachments = node->subpassInfo.colorAttachmentReferences.data();
+        subpassDescription.pResolveAttachments = node->subpassInfo.resolveAttachmentReferences.data();
         uint32_t inputAttachmentSize = 0;
         for (std::pair<uint32_t, std::pair<uint32_t, RenderSubpass*>> pair : node->inputs) {
             if ((pair.first + 1) > inputAttachmentSize) {
@@ -502,6 +540,13 @@ RenderPass::RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& _n
 
     if (vkCreateRenderPass(ctx->device, &renderPassInfo, nullptr, &this->renderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass.");
+    }
+
+    // Clean up subpass data
+    for (uint32_t i = 0; i < this->nodes.size(); i++) {
+        nodes[i]->subpassInfo.colorAttachmentReferences.clear();
+        nodes[i]->subpassInfo.resolveAttachmentReferences.clear();
+        nodes[i]->subpassInfo.inputAttachmentReferences.clear();
     }
 }
 

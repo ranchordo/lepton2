@@ -34,10 +34,17 @@ struct DepthAttachmentInfo {
     std::vector<VulkanImage*> depthTargetImages;
 };
 
+//! Internal reference for a resolve attachment
+struct ResolveAttachmentInfo {
+    bool filled = false;
+    RenderTargetImageCreationInfo rticInfo;
+    VkAttachmentDescription desc;
+};
+
 class RenderSubpass;
 class RenderPass : public DeletableVulkanResource {
    public:
-    RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& subpasses, uint32_t resourceMultiplicity);
+    RenderPass(VulkanContext* ctx, const std::vector<RenderSubpass*>& subpasses, uint32_t resourceMultiplicity, VkSampleCountFlagBits depthStencilSamples = VK_SAMPLE_COUNT_1_BIT);
 
     // Rendering
     void begin(VkCommandBuffer commandBuffer, uint32_t framebufferIndex);
@@ -61,6 +68,7 @@ class RenderPass : public DeletableVulkanResource {
     VkRenderPass getRenderPass() { return this->renderPass; }
     DepthAttachmentInfo* getDepthAttachmentInfo() { return &this->depthAttachmentInfo; }
     void setDepthStencilClearValue(VkClearDepthStencilValue val) { this->depthStencilClearValue.depthStencil = val; }
+    VkSampleCountFlagBits getDepthStencilSamples() { return this->depthStencilSamples; }
 
     void destroy_back(VulkanContext* ctx) override;
 
@@ -77,6 +85,7 @@ class RenderPass : public DeletableVulkanResource {
     VkPipelineLayout dummyPassLayout = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> superpassLayouts;
     uint32_t resourceMultiplicity;
+    VkSampleCountFlagBits depthStencilSamples;
 };
 
 class SubpassRenderCallback {
@@ -99,6 +108,8 @@ class RenderSubpass : public DeletableVulkanResource {
     static TerminatingSubpassConfig getDefaultTerminatingConfig(VkFormat imageFormat, VkImageLayout finalLayout);
 
     ColorAttachmentInfo* addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
+    void addResolveAttachment(RenderTargetImageCreationInfo rticInfo, uint32_t index, VkImageLayout finalLayout); //!< Add non-terminal resolve attachment associated with color attachment `index`.
+    void addResolveAttachment(TerminatingSubpassConfig config, uint32_t index); //!< Add terminal resolve attachment associated with color attachment `index`.
     void connectFromNode(RenderSubpass* src, uint32_t color_output, uint32_t inputAttachmentIndex);
     void requestDepthAsInput(uint32_t index); //!< Make the depth buffer accessible through input attachment `index`.
 
@@ -119,9 +130,11 @@ class RenderSubpass : public DeletableVulkanResource {
     struct {
         std::vector<VkAttachmentReference> colorAttachmentReferences;
         std::vector<VkAttachmentReference> inputAttachmentReferences;
+        std::vector<VkAttachmentReference> resolveAttachmentReferences;
         VkAttachmentReference depthStencilAttachmentReference;
     } subpassInfo;
     std::vector<ColorAttachmentInfo> colorAttachments;
+    std::vector<ResolveAttachmentInfo> resolveAttachments;
     bool isTerminatingNode;
     uint32_t nodeIndex = 0;
     uint8_t markings = 0;
@@ -132,6 +145,6 @@ class RenderSubpass : public DeletableVulkanResource {
     SubpassRenderCallback* renderCallback = nullptr;
     VkPipelineLayout dummySubpassLayout = VK_NULL_HANDLE;
 
-    friend RenderPass::RenderPass(VulkanContext*, const std::vector<RenderSubpass*>&, uint32_t);
+    friend RenderPass::RenderPass(VulkanContext*, const std::vector<RenderSubpass*>&, uint32_t, VkSampleCountFlagBits);
 };
 }  // namespace lepton2::vulkancore

@@ -69,6 +69,7 @@ void Swapchain::querySwapchain(VulkanContext* ctx) {
     this->queryResults.presentMode = this->choosePresentMode(swapchainSupport.presentModes);
     this->extent = chooseSwapExtent(ctx, swapchainSupport.capabilities, Swapchain::getGLFWExtent(ctx));
     this->queryResults.currentTransform = swapchainSupport.capabilities.currentTransform;
+    this->queryResults.supportedAlpha = swapchainSupport.capabilities.supportedCompositeAlpha;
     uint32_t imageCount = swapchainSupport.capabilities.minImageCount + 1;
     if (swapchainSupport.capabilities.maxImageCount > 0 && imageCount > swapchainSupport.capabilities.maxImageCount) {
         imageCount = swapchainSupport.capabilities.maxImageCount;
@@ -111,6 +112,8 @@ void Swapchain::buildSwapchain(VulkanContext* ctx) {
     }
     createInfo.preTransform = queryResults.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    if (queryResults.supportedAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    if (queryResults.supportedAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
     createInfo.presentMode = queryResults.presentMode;
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;

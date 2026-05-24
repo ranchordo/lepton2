@@ -5,6 +5,7 @@ extern int demo_simple_subpasses(int argc, char** argv);
 extern int demo_compute_postprocess(int argc, char** argv);
 extern int demo_headless_compute(int argc, char** argv);
 extern int demo_render_to_texture(int argc, char** argv);
+extern int demo_multisampled_subpasses(int argc, char** argv);
 
 int run_single_demo(int (*fptr)(int, char**), const char* name, const char* testname,
                     int mode, int argc, char** argv) {
@@ -28,6 +29,7 @@ int run_demos(const char* name, int mode, int argc, char** argv) {
     DO_DEMO(demo_compute_postprocess);
     DO_DEMO(demo_headless_compute);
     DO_DEMO(demo_render_to_texture);
+    DO_DEMO(demo_multisampled_subpasses);
     return -1;
 }
 
