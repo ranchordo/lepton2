@@ -291,7 +291,7 @@ void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, uint3
     }
 }
 
-DescriptorSetArray::DescriptorSetArray(DescriptorSetLayoutInfo _layoutInfo) {
+DescriptorSetArray::DescriptorSetArray(const DescriptorSetLayoutInfo& _layoutInfo) {
     this->layoutInfo = _layoutInfo;
     this->externalLayout = false;
 }

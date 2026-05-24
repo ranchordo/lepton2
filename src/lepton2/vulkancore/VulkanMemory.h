@@ -5,6 +5,7 @@
 namespace lepton2::vulkancore {
 class VulkanContext;
 
+//! A chunk of vulkan memory which keeps track of its state within the allocator.
 struct MemoryChonkletEntry {
     VkDeviceSize offset;
     VkDeviceSize size;
@@ -18,6 +19,7 @@ struct MemoryChonkletEntry {
     }
 };
 
+//! A large allocation of vulkan memory from which other resources may be allocated.
 struct MemoryChonkus : public DeletableVulkanResource {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     uint32_t memory_type;
@@ -27,6 +29,7 @@ struct MemoryChonkus : public DeletableVulkanResource {
     void destroy_back(VulkanContext* ctx) override;
 };
 
+//! A minor chunk of memory belonging to a MemoryChonkus which is used for a single object.
 struct MemoryChonklet : public DeletableVulkanResource {
     MemoryChonkus* chonkus = nullptr;
     VkDeviceSize offset;
@@ -38,6 +41,7 @@ struct MemoryChonklet : public DeletableVulkanResource {
     void destroy_back(VulkanContext* ctx) override;
 };
 
+//! Simple linked list memory allocator which returns chonklets when requested.
 class VulkanAllocationManager : public DeletableVulkanResource {
    public:
     MemoryChonklet findMemory(VulkanContext* ctx, VkDeviceSize size, VkDeviceSize alignment, uint32_t memoryTypeIndex);

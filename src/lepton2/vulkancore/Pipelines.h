@@ -7,6 +7,7 @@
 namespace lepton2::vulkancore {
 class RenderSubpass;
 
+//! Constraints for creating or matching graphics pipelines.
 struct GraphicsPipelineConstraints {
     GraphicsPipelineConstraints(const char* _shaderName,
                                 DescriptorSetLayoutInfo _layoutInfo,
@@ -31,6 +32,7 @@ struct GraphicsPipelineConstraints {
     bool compatible(const GraphicsPipelineConstraints& other);
 };
 
+//! Full creation information for a graphical pipeline.
 struct GraphicsPipelineInfo {
     GraphicsPipelineInfo(const std::vector<VkDescriptorSetLayout>& dsl,
                          GraphicsPipelineConstraints& constraints) : constraints(constraints) {
@@ -69,6 +71,7 @@ class GraphicsPipeline : public DeletableVulkanResource {
     VkPipelineLayout pipelineLayout;
 };
 
+//! Full creation information for a compute pipeline.
 struct ComputePipelineInfo {
     ComputePipelineInfo(const std::vector<VkDescriptorSetLayout>& dsl, const char* _shaderName) {
         this->shaderName = _shaderName;

@@ -13,6 +13,7 @@ class GraphicalEntity;
 class SubpassGraphicalConfigurationStore;
 class GraphicalConfiguration;
 
+//! Holds a link between a GraphicalEntity and the GraphicalConfiguration it uses.
 struct GraphicalConfigurationHandle {
     GraphicalConfiguration* config;
     GraphicalEntity* user;
@@ -21,6 +22,7 @@ struct GraphicalConfigurationHandle {
     void debugPrintAllBoundDescriptors();
 };
 
+//! The graphics submodule representation of a graphical pipeline, collected with the entities that use it.
 class GraphicalConfiguration : public vkc::DeletableVulkanResource {
    public:
     void renderAllUsers(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
@@ -39,6 +41,7 @@ class GraphicalConfiguration : public vkc::DeletableVulkanResource {
     friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };
 
+//! Render callback to inject into vulkancore render subpass.
 class SubpassGCSRenderCallback : public vkc::SubpassRenderCallback {
    public:
     SubpassGCSRenderCallback(SubpassGraphicalConfigurationStore* store) {
@@ -51,6 +54,7 @@ class SubpassGCSRenderCallback : public vkc::SubpassRenderCallback {
     SubpassGraphicalConfigurationStore* store;
 };
 
+//! Set of candidate graphical configurations registered within a render subpass.
 class SubpassGraphicalConfigurationStore : public vkc::DeletableVulkanResource {
    public:
     SubpassGraphicalConfigurationStore(vkc::RenderSubpass* node, vkc::RenderPass* renderPass) : renderCallback(this) {
@@ -76,6 +80,7 @@ class SubpassGraphicalConfigurationStore : public vkc::DeletableVulkanResource {
     friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };
 
+//! Collection of render passes, where each subpass is associated with a SubpassGraphicalConfigurationStore.
 class GraphicalConfigurationStore : public vkc::DeletableVulkanResource {
    public:
     std::unordered_map<vkc::RenderPass*, std::vector<SubpassGraphicalConfigurationStore*>> subpassStores;

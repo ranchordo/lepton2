@@ -114,3 +114,6 @@ documentation: clean_documentation
 	moxygen docs/doxygen_xml -c -H -o docs/docs_root/doxygen/%s.md
 	python3 docs/process_doxygen.py
 	mkdocs build -f docs/mkdocs.yml
+
+serve_documentation: documentation
+	python3 -m http.server --bind 127.0.0.1 --directory docs/site

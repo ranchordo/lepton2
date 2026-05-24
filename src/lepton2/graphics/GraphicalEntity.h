@@ -9,6 +9,7 @@ namespace lepton2::graphics {
 
 namespace vkc = lepton2::vulkancore;
 
+//! Entity object under the 3d graphics submodule, rendered through its registered configuration.
 class GraphicalEntity : public vkc::DeletableVulkanResource {
    public:
     void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store);
@@ -27,7 +28,7 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
    protected:
     virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node) {}
     virtual vkc::GraphicsPipelineConstraints getPipelineRequirements() = 0;
-    virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t frameIndex) {}
+    virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t frameIndex) {} //!< Typically for manipulation of entity data on each frame.
     virtual void preRenderCmd(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {}
     void setObjectData(vkc::DeviceObjectData* objectData) { this->objectData = objectData; }
 

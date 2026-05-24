@@ -22,9 +22,13 @@ struct ObjLoadVertex {
     }
 };
 
+//! Vertex structure with a 3d position and 2d texture coordinate.
 extern vkc::VertexStructDescriptor simplePresetVsd;
+
+//! Typical wavefront vertex format (3d position, 2d texcoord, 3d normal).
 extern vkc::VertexStructDescriptor objLoadVsd;
 
+//! Static rectangle filling the entire frame, typically used for graphical postprocessing.
 class StaticScreenEntity : public GraphicalEntity {
    public:
     StaticScreenEntity(vkc::VulkanContext* ctx, const char* shaderName);
@@ -36,6 +40,11 @@ class StaticScreenEntity : public GraphicalEntity {
     const char* shaderName;
 };
 
+//! Very general-purpose graphical entity preset.
+/**
+ * GenericEntity supports texturing and a single uniform buffer with standard frames-in-flight multiplicity.
+ * VertexStructDescriptor is also adjustable.
+ */
 class GenericEntity : public GraphicalEntity {
    public:
     GenericEntity(vkc::VulkanContext* ctx, const char* shaderName, vkc::DeviceObjectData* objectData, vkc::VertexStructDescriptor vsd = objLoadVsd);
@@ -67,6 +76,7 @@ class GenericEntity : public GraphicalEntity {
 
 namespace std {
 template <>
+//! Used for deduplication during wavefront import
 struct hash<lepton2::graphics::graphicalpresets::ObjLoadVertex> {
     size_t operator()(lepton2::graphics::graphicalpresets::ObjLoadVertex const& vertex) const {
         return hash<glm::vec3>()(vertex.pos) ^

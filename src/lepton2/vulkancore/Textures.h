@@ -5,6 +5,7 @@
 
 namespace lepton2::vulkancore {
 
+//! Represents a single component of a complex texture (e.g. albedo, normal, etc).
 class TextureComponent : public DeletableVulkanResource {
    public:
     TextureComponent(VulkanContext* ctx, void* imageData, uint32_t width, uint32_t height, VkFormat format);
@@ -29,10 +30,13 @@ struct SamplerInfo {
     VkCompareOp compareOp = VK_COMPARE_OP_ALWAYS;
 };
 
+//! A collection of texture components.
+/**
+ * Note: all added texture components will be automatically destroyed upon Texture::destroy(VulkanContext*).
+ */
 class Texture : public DeletableVulkanResource {
    public:
     Texture(VulkanContext* ctx, SamplerInfo samplerInfo);
-    // Note: Texture components are then linked for destruction
     void addTextureComponent(TextureComponent* images);
     void addTextureComponent(VulkanContext* ctx, const char* filename, VkFormat format);
     void destroy_back(VulkanContext* ctx) override;

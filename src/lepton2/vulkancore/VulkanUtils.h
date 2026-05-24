@@ -120,6 +120,7 @@ enum ImageLayoutTransitionMode {
     ILTM_UNDEFINED_TO_PRESENT_SRC_KHR
 };
 
+//! Really just an array of images, together with a bundled extent.
 class ImageArray : public DeletableVulkanResource {
    public:
     ImageArray() {}

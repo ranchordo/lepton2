@@ -11,6 +11,7 @@ namespace lepton2::utils {
 
 namespace vkc = lepton2::vulkancore;
 
+//! Not for external use - use GenericWavefrontData::GenericWavefrontData for parsing.
 extern void parseGenericWavefront(vkc::VulkanContext* ctx, const char* loc, std::vector<const char*> pfx,
                                   uint32_t* pfx_sizes, std::vector<double>* l1, std::vector<uint32_t>* fd);
 extern vkc::HostObjectData* buildGenericWavefrontObj(vkc::VulkanContext* ctx, uint32_t* pfx, uint32_t vsize, std::vector<double>* l1,
@@ -28,7 +29,12 @@ class GenericWavefrontData {
             l1_data[prefix_idx][i] *= amt;
         }
     }
-
+    
+    //! Load a generic wavefront file.
+    /**
+     * \param loc Relative filename of wavefront file.
+     * \param pfx Names of the l1 followed by the face prefixes - for typical obj files using objLoadVsd, this could be {"v", "vt", "vn", "f"}.
+     */
     GenericWavefrontData(vkc::VulkanContext* ctx, const char* loc, std::vector<const char*> pfx) {
         if (pfx.size() - 1 != num_l1_prefix) {
             throw std::runtime_error("Incorrect number of l1 prefixes used for parsing generic wavefront");

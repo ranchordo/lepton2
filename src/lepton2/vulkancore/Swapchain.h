@@ -19,7 +19,7 @@ class Swapchain : public DeletableVulkanResource {
    public:    
     SwapchainFrame getFrame(VulkanContext* ctx, VkSemaphore semaphore);
 
-    void querySwapchain(VulkanContext* ctx);
+    void querySwapchain(VulkanContext* ctx); //!< Check swapchain support and decide configuration (performed by VulkanContext initialization)
     void buildSwapchain(VulkanContext* ctx);
 
     VkFormat getImageFormat() { return this->imageFormat; }
@@ -28,12 +28,12 @@ class Swapchain : public DeletableVulkanResource {
     VkSwapchainKHR* getSwapchain() { return &this->swapchain; }
     ImageArray* getSwapchainImages() { return &this->images; }
 
-    TerminatingSubpassConfig getDefaultPresentConfig();
+    TerminatingSubpassConfig getDefaultPresentConfig(); //!< Terminal subpass configuration for presenting to the swapchain's ImageArray.
 
     // Configuration
-    void setPresentMode(VkPresentModeKHR presentMode) { this->preferences.presentMode = presentMode; }
-    void setSurfaceFormat(VkSurfaceFormatKHR surfaceFormat) { this->preferences.surfaceFormat = surfaceFormat; }
-    void setUsageFlags(VkImageUsageFlags flags) { this->preferences.usageFlags = flags; }
+    void setPresentMode(VkPresentModeKHR presentMode) { this->preferences.presentMode = presentMode; } //!< Set preferred present mode (may not be granted depending on queried support).
+    void setSurfaceFormat(VkSurfaceFormatKHR surfaceFormat) { this->preferences.surfaceFormat = surfaceFormat; } //!< Set preferred formatting for swapchain images (may not be granted depending on queried support).
+    void setUsageFlags(VkImageUsageFlags flags) { this->preferences.usageFlags = flags; } //!< Set usage flags for swapchain images.
 
     void destroy_back(VulkanContext* ctx) override;
 

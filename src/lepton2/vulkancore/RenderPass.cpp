@@ -83,8 +83,7 @@ void RenderSubpass::requestDepthAsInput(uint32_t index) {
     this->depthInputRequest = index;
 }
 
-// FIXME: Avoid passing dslis - they contain vectors and stuff
-void RenderSubpass::setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, DescriptorSetLayoutInfo dsli) {
+void RenderSubpass::setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, const DescriptorSetLayoutInfo& dsli) {
     if (this->subpassDsa != nullptr || this->subpassAttachmentDsa != nullptr) {
         throw std::runtime_error("Subpass DSA may only be set up once.");
     }
@@ -297,7 +296,7 @@ void RenderPass::setSuperpassLayouts(std::vector<VkDescriptorSetLayout> _superpa
     this->superpassLayouts = _superpassLayouts;
 }
 
-void RenderPass::setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli) {
+void RenderPass::setupPassDescriptorSet(VulkanContext* ctx, const DescriptorSetLayoutInfo& dsli) {
     if (this->passDsa != nullptr) {
         throw std::runtime_error("RenderPass DSA may only be set up once.");
     }

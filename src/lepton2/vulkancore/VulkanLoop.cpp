@@ -56,7 +56,7 @@ void ImageArraySwapchainRebuild::onSwapchainRebuild(VulkanContext* ctx) {
 }
 
 SimpleComputePass::SimpleComputePass(VulkanContext* ctx, const char* shaderName, ImageArray* inputContainer, ImageArray* outputContainer, VkExtent2D localSize,
-                                     VkImageLayout outputLayout, std::vector<VkDescriptorSetLayout> otherDsls, DescriptorSetLayoutInfo dsli1) {
+                                     VkImageLayout outputLayout, std::vector<VkDescriptorSetLayout> otherDsls, const DescriptorSetLayoutInfo& initDsli) {
     this->localSize = localSize;
     this->inputContainer = inputContainer;
     this->outputContainer = outputContainer;
@@ -64,6 +64,7 @@ SimpleComputePass::SimpleComputePass(VulkanContext* ctx, const char* shaderName,
     this->swapchainIndexing = (inputContainer->images.size() != outputContainer->images.size());
     this->setidx = otherDsls.size();
 
+    DescriptorSetLayoutInfo dsli1 = initDsli;
     DescriptorSetLayoutInfo dsli2;
     DescriptorInfo info;
     info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;

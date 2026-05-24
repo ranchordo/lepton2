@@ -21,6 +21,7 @@ struct QueueFamilyIndices {
     }
 };
 
+//! Mystery swapchain-related thing not in the swapchain file
 struct SwapchainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
@@ -30,6 +31,11 @@ struct SwapchainSupportDetails {
     }
 };
 
+//! Holds the major vulkan resources (instance, device) necessary for most operations.
+/**
+ * Should only be initialized once. Passing nullptr instead of GLFWwindow* will initialize the vulkan context in headless mode.
+ * Direct interaction with this vulkan context class should not be necessary past the vulkancore level.
+ */
 class VulkanContext : public DeletableVulkanResource {
    public:
     VulkanContext(const char* argv0, bool _enableValidationLayers, bool _printDebugInfo, VkApplicationInfo appInfo, GLFWwindow* _window) {

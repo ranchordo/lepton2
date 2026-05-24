@@ -21,6 +21,7 @@ struct RenderTargetImageCreationInfo {
 // Utility function to decrease verbosity
 RenderTargetImageCreationInfo defaultColorAttachmentRTIC(VkFormat format, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
 
+//! Represents a single non-terminal color attachment for a render subpass.
 struct ColorAttachmentInfo {
     VkAttachmentDescription desc;
     RenderTargetImageCreationInfo rticInfo;
@@ -28,6 +29,7 @@ struct ColorAttachmentInfo {
     std::vector<VulkanImage*> renderTargets;
 };
 
+//! Represents the depth attachment for a render pass.
 struct DepthAttachmentInfo {
     std::vector<VulkanImage*> depthTargetImages;
 };
@@ -46,8 +48,8 @@ class RenderPass : public DeletableVulkanResource {
     // Initial configuration
     void generateFramebuffers(VulkanContext* ctx, ImageArray* finalImages);
     void destroyFramebuffers(VulkanContext* ctx);
-    void setupPassDescriptorSet(VulkanContext* ctx, DescriptorSetLayoutInfo dsli);
-    void setSuperpassLayouts(std::vector<VkDescriptorSetLayout> superpassLayouts);
+    void setSuperpassLayouts(std::vector<VkDescriptorSetLayout> superpassLayouts); //!< Set up descriptor sets which will be bound outside the render pass.
+    void setupPassDescriptorSet(VulkanContext* ctx, const DescriptorSetLayoutInfo& dsli); //!< Descriptor set layouts shared across all render subpasses.
 
     // Simple getters/setters
     uint32_t numSubpasses() { return this->nodes.size(); }
@@ -83,6 +85,7 @@ class SubpassRenderCallback {
     virtual void preRenderSubpass(VulkanContext* ctx, uint32_t frameIndex) = 0;
 };
 
+//! Information regarding how the final render subpass should output image data.
 struct TerminatingSubpassConfig {
     VkAttachmentDescription attachmentDescription;
     VkPipelineColorBlendAttachmentState blendState;
@@ -90,14 +93,14 @@ struct TerminatingSubpassConfig {
 
 class RenderSubpass : public DeletableVulkanResource {
    public:
-    RenderSubpass();  // Non-terminating default
-    RenderSubpass(VulkanContext* ctx, TerminatingSubpassConfig config);
+    RenderSubpass();  //!< Create a non-terminating (intermediate) subpass
+    RenderSubpass(VulkanContext* ctx, TerminatingSubpassConfig config); //!< Create the terminating (final) subpass.
 
     static TerminatingSubpassConfig getDefaultTerminatingConfig(VkFormat imageFormat, VkImageLayout finalLayout);
 
     ColorAttachmentInfo* addColorAttachment(RenderTargetImageCreationInfo rticInfo, bool clear);
     void connectFromNode(RenderSubpass* src, uint32_t color_output, uint32_t inputAttachmentIndex);
-    void requestDepthAsInput(uint32_t index);
+    void requestDepthAsInput(uint32_t index); //!< Make the depth buffer accessible through input attachment `index`.
 
     uint32_t getSubpassIndex() { return this->nodeIndex; }
     std::vector<ColorAttachmentInfo>& getColorAttachments() { return this->colorAttachments; }
@@ -106,7 +109,7 @@ class RenderSubpass : public DeletableVulkanResource {
     DescriptorSetArray* getSubpassDsa() { return this->subpassDsa; }
     DescriptorSetArray* getSubpassAttachmentDsa() { return this->subpassAttachmentDsa; }
 
-    void setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, DescriptorSetLayoutInfo dsli);
+    void setupSubpassDescriptorSet(VulkanContext* ctx, RenderPass* parent, const DescriptorSetLayoutInfo& dsli); //!< Set up descriptor set which will be bound for all subpass rendering operations.
     void setRenderCallback(SubpassRenderCallback* callback) { this->renderCallback = callback; }
 
     void destroy_back(VulkanContext* ctx) override;
