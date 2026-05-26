@@ -53,14 +53,14 @@ class GenericEntity : public GraphicalEntity {
     void setTexture(vkc::Texture* texture) { this->texture = texture; }
     virtual void logic() {};
 
-    void set_ubo(void* _ubo, size_t _ubo_size) {
+    void setUbo(void* _ubo, size_t _ubo_size) {
         this->ubo = _ubo;
         this->ubo_size = _ubo_size;
     }
 
     struct {
         glm::mat4 model = glm::mat4(1.0f);
-    } base_ubo;
+    } baseUbo;
 
     void destroy_back(vkc::VulkanContext* ctx) override { this->destroyEntityResources(ctx); }
 
@@ -68,8 +68,8 @@ class GenericEntity : public GraphicalEntity {
     const char* shaderName;
     vkc::Texture* texture = nullptr;
     vkc::VertexStructDescriptor vsd;
-    void* ubo = &this->base_ubo;
-    size_t ubo_size = sizeof(base_ubo);
+    void* ubo = &this->baseUbo;
+    size_t ubo_size = sizeof(baseUbo);
 };
 
 };  // namespace lepton2::graphics::graphicalpresets

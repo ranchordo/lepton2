@@ -26,12 +26,12 @@ struct ColorAttachmentInfo {
     VkAttachmentDescription desc;
     RenderTargetImageCreationInfo rticInfo;
     VkClearValue clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
-    std::vector<VulkanImage*> renderTargets;
+    ImageArray images;
 };
 
 //! Represents the depth attachment for a render pass.
 struct DepthAttachmentInfo {
-    std::vector<VulkanImage*> depthTargetImages;
+    ImageArray images;
 };
 
 //! Internal reference for a resolve attachment
@@ -69,6 +69,7 @@ class RenderPass : public DeletableVulkanResource {
     DepthAttachmentInfo* getDepthAttachmentInfo() { return &this->depthAttachmentInfo; }
     void setDepthStencilClearValue(VkClearDepthStencilValue val) { this->depthStencilClearValue.depthStencil = val; }
     VkSampleCountFlagBits getDepthStencilSamples() { return this->depthStencilSamples; }
+    VkExtent2D* getDepthStencilExtent() { return &this->depthAttachmentInfo.images.extent; }
 
     void destroy_back(VulkanContext* ctx) override;
 

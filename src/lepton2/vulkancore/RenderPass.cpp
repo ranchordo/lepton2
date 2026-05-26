@@ -266,9 +266,11 @@ void RenderPass::generateFramebuffers(VulkanContext* ctx, ImageArray* finalImage
                 nfb->addImage(rtImage);
                 this->renderTargetImages.push_back(rtImage);
                 if (rticInfo.aspectFlags & VK_IMAGE_ASPECT_DEPTH_BIT) {
-                    this->depthAttachmentInfo.depthTargetImages.push_back(rtImage);
+                    this->depthAttachmentInfo.images.images.push_back(rtImage);
+                    this->depthAttachmentInfo.images.extent = finalImages->extent;
                 } else if (rticInfo.colorAttachmentIdx != UINT32_MAX && !rticInfo.isTerminal) {
-                    nodes[rticInfo.nodeidx]->getColorAttachments()[rticInfo.colorAttachmentIdx].renderTargets.push_back(rtImage);
+                    nodes[rticInfo.nodeidx]->getColorAttachments()[rticInfo.colorAttachmentIdx].images.images.push_back(rtImage);
+                    nodes[rticInfo.nodeidx]->getColorAttachments()[rticInfo.colorAttachmentIdx].images.extent = finalImages->extent;
                 }
             }
         }
@@ -286,10 +288,10 @@ void RenderPass::generateFramebuffers(VulkanContext* ctx, ImageArray* finalImage
 }
 
 void RenderPass::destroyFramebuffers(VulkanContext* ctx) {
-    this->depthAttachmentInfo.depthTargetImages.clear();
+    this->depthAttachmentInfo.images.images.clear();
     for (RenderTargetImageCreationInfo rticInfo : this->rticInfos) {
         if (rticInfo.colorAttachmentIdx != UINT32_MAX && !rticInfo.isTerminal) {
-            nodes[rticInfo.nodeidx]->getColorAttachments()[rticInfo.colorAttachmentIdx].renderTargets.clear();
+            nodes[rticInfo.nodeidx]->getColorAttachments()[rticInfo.colorAttachmentIdx].images.images.clear();
         }
     }
     for (Framebuffer* fb : this->targets) {

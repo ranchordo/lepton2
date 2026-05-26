@@ -8,12 +8,14 @@ using namespace lepton2::graphics;
 
 void GraphicalEntity::initialize(VulkanContext* ctx, RenderPass* renderState, RenderSubpass* node, GraphicalConfigurationStore* store) {
     GraphicsPipelineConstraints req = this->getPipelineRequirements();
-    SubpassGraphicalConfigurationStore* subpassStore = store->subpassStores[renderState].at(node->getSubpassIndex());
-    this->pipelineData = subpassStore->getConfiguration(ctx, req, this);
-    this->dsa = new DescriptorSetArray(this->pipelineData.config->getLayoutReference());
-    uint32_t numDescriptors = renderState->getResourceMultiplicity();
-    ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->dsa, numDescriptors);
-    this->postInit(ctx, renderState, node);
+    if (req.shaderName != nullptr) {
+        SubpassGraphicalConfigurationStore* subpassStore = store->subpassStores[renderState].at(node->getSubpassIndex());
+        this->pipelineData = subpassStore->getConfiguration(ctx, req, this);
+        this->dsa = new DescriptorSetArray(this->pipelineData.config->getLayoutReference());
+        uint32_t numDescriptors = renderState->getResourceMultiplicity();
+        ctx->descriptorPoolManager.allocateDescriptorSets(ctx, this->dsa, numDescriptors);
+    }
+    this->postInit(ctx, renderState, node, store);
 }
 
 void GraphicalEntity::render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {
@@ -30,7 +32,11 @@ void GraphicalEntity::render(VkCommandBuffer commandBuffer, uint32_t frameIndex,
 }
 
 void GraphicalEntity::destroyEntityResources(VulkanContext* ctx) {
-    this->dsa->destroy(ctx);
-    delete this->dsa;
-    this->pipelineData.store->dropConfigurationHandle(ctx, this->pipelineData);
+    if (this->dsa != nullptr) {
+        this->dsa->destroy(ctx);
+        delete this->dsa;
+    }
+    if (this->pipelineData.store != nullptr) {
+        this->pipelineData.store->dropConfigurationHandle(ctx, this->pipelineData);
+    }
 }

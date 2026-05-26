@@ -15,7 +15,7 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store);
     void render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
     void doPreRender(vkc::VulkanContext* ctx, uint32_t frameIndex) {
-        this->preRender(ctx, &dsa->singleDescriptorSets[frameIndex], frameIndex);
+        this->preRender(ctx, dsa != nullptr ? &dsa->singleDescriptorSets[frameIndex] : nullptr, frameIndex);
     }
 
     GraphicalConfigurationHandle& getConfigurationHandle() { return pipelineData; }
@@ -26,17 +26,17 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     }
 
    protected:
-    virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node) {}
+    virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store) {}
     virtual vkc::GraphicsPipelineConstraints getPipelineRequirements() = 0;
     virtual void preRender(vkc::VulkanContext* ctx, vkc::SingleDescriptorSet* sds, uint32_t frameIndex) {} //!< Typically for manipulation of entity data on each frame.
     virtual void preRenderCmd(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {}
     void setObjectData(vkc::DeviceObjectData* objectData) { this->objectData = objectData; }
 
    private:
-    GraphicalConfigurationHandle pipelineData;
+    GraphicalConfigurationHandle pipelineData = {nullptr, nullptr, nullptr};
     vkc::DeviceObjectData* objectData = nullptr;
     uint32_t numInstances = 1;
-    vkc::DescriptorSetArray* dsa;
+    vkc::DescriptorSetArray* dsa = nullptr;
 
     friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };

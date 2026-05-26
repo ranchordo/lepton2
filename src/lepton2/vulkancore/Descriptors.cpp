@@ -156,17 +156,17 @@ InputAttachmentDescriptor::InputAttachmentDescriptor(VulkanContext* ctx, Descrip
 DescriptorWriteInfoContainer InputAttachmentDescriptor::getWriteInfo(VulkanContext* ctx, VkDescriptorSet dstSet, uint32_t dstBinding) {
     DescriptorWriteInfoContainer ret;
     if (this->colorAttachmentInfo != nullptr) {
-        if (this->colorAttachmentInfo->renderTargets.size() <= this->arrayIndex) {
+        if (this->colorAttachmentInfo->images.images.size() <= this->arrayIndex) {
             throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting color target. Is colorAttachmentInfo correct?");
         }
         ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        ret.imageInfo.imageView = this->colorAttachmentInfo->renderTargets[this->arrayIndex]->imageView;
+        ret.imageInfo.imageView = this->colorAttachmentInfo->images.images[this->arrayIndex]->imageView;
     } else if (this->depthAttachmentInfo != nullptr) {
-        if (this->depthAttachmentInfo->depthTargetImages.size() <= this->arrayIndex) {
+        if (this->depthAttachmentInfo->images.images.size() <= this->arrayIndex) {
             throw std::runtime_error("InputAttachmentDescriptor can't locate the right non-presenting depth target. Is depthAttachmentInfo correct?");
         }
         ret.imageInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-        ret.imageInfo.imageView = this->depthAttachmentInfo->depthTargetImages[this->arrayIndex]->imageView;
+        ret.imageInfo.imageView = this->depthAttachmentInfo->images.images[this->arrayIndex]->imageView;
     }
 
     ret.writeInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

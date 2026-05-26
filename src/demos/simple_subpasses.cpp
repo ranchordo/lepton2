@@ -127,7 +127,7 @@ int demo_simple_subpasses(int argc, char** argv) {
             GraphicsPipelineConstraints req("demos/simple_subpasses/simple_axion", dsli, simplePresetVsd);
             return req;
         }
-        void postInit(VulkanContext* ctx, RenderPass* pass, RenderSubpass* node) override {
+        void postInit(VulkanContext* ctx, RenderPass* pass, RenderSubpass* node, GraphicalConfigurationStore* store) override {
             this->start_time_point = startTiming();
         }
         void preRender(VulkanContext* ctx, SingleDescriptorSet* sds, uint32_t frameIndex) override {
