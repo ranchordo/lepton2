@@ -1,5 +1,7 @@
 .vscode
 
+callgrind.out.*
+
 build
 shaders_build
 

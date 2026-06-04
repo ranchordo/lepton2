@@ -15,6 +15,7 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     void initialize(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store);
     void render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx);
     void doPreRender(vkc::VulkanContext* ctx, uint32_t frameIndex) {
+        if (!active) return;
         this->preRender(ctx, dsa != nullptr ? &dsa->singleDescriptorSets[frameIndex] : nullptr, frameIndex);
     }
 
@@ -24,6 +25,9 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     virtual void destroy_back(vkc::VulkanContext* ctx) override {
         this->destroyEntityResources(ctx);
     }
+
+    void setActive(bool active) { this->active = active; }
+    bool isActive() { return this->active; }
 
    protected:
     virtual void postInit(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::RenderSubpass* node, GraphicalConfigurationStore* store) {}
@@ -37,6 +41,7 @@ class GraphicalEntity : public vkc::DeletableVulkanResource {
     vkc::DeviceObjectData* objectData = nullptr;
     uint32_t numInstances = 1;
     vkc::DescriptorSetArray* dsa = nullptr;
+    bool active = true;
 
     friend void GraphicalConfigurationHandle::debugPrintAllBoundDescriptors();
 };

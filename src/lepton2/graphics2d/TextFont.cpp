@@ -1,5 +1,8 @@
 #include "TextFont.h"
 
+#include "../vulkancore/VulkanUtils.h"
+#include "Entity2d.h"
+
 using namespace lepton2::graphics2d;
 using namespace lepton2::vulkancore;
 
@@ -86,7 +89,7 @@ struct TTFHeadTable {
         }
         longLocFormat = (bool)(indexToLocFormat);
     }
-    inline float applyScale(uint16_t dist) {
+    inline float applyScale(int16_t dist) {
         return ((float)dist) / ((float)unitsPerEm);
     }
     uint16_t unitsPerEm;
@@ -369,9 +372,17 @@ struct TTFGlyph {
         }
 
         if (rxmin != xmin || rymin != ymin || rxmax != xmax || rymax != ymax) {
-            throw std::runtime_error("Failed bounds check for TTF glyph.");
+            printf("Warning: Failed bounds check for TTF glyph.\n");
         }
     }
+
+    glm::vec2 getPoint(uint32_t index, TTFHeadTable& head) {
+        glm::vec2 point;
+        point.x = head.applyScale(xCoords[index]);
+        point.y = 0.5f - head.applyScale(yCoords[index]);
+        return point;
+    }
+
     std::vector<uint16_t> contourEndIndices;
     int16_t xmin, xmax, ymin, ymax;
     std::vector<int16_t> xCoords;
@@ -434,6 +445,213 @@ class TTFParser {
 };
 }  // namespace lepton2::graphics2d
 
+struct Triangle {
+    uint32_t t[3];
+    glm::vec2 cc;
+    float cr;
+};
+
+static inline constexpr float cross2d(glm::vec2 v1, glm::vec2 v2) {
+    return v1.x * v2.y - v1.y * v2.x;
+}
+
+static bool intersectionTest(glm::vec2 p1, glm::vec2 p2, glm::vec2 q1, glm::vec2 q2, float clip) {
+    glm::vec2 p1p2 = p1 - p2, q1q2 = q1 - q2;
+    float d = cross2d(p1p2, q1q2);
+    if (fabs(d) < 0.001) return false;
+    float s = cross2d(q2 - p2, p1p2) / d;
+    if ((0.5 - fabs(s - 0.5)) < clip) return false;
+    float t = cross2d(q2 - p2, q1q2) / d;
+    return ((0.5 - fabs(t - 0.5)) >= clip);
+}
+
+#define VEC2_YX(v) glm::vec2(v.y, v.x)
+#define VEC2_D11(v) glm::dot(glm::vec2(1.f, 1.f), v)
+
+static void pushTriangle(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, uint32_t t0, uint32_t t1, uint32_t t2) {
+    glm::vec2 p0 = points[t0].pos2d;
+    glm::vec2 p1 = points[t1].pos2d;
+    glm::vec2 p2 = points[t2].pos2d;
+
+    Triangle tri;
+    tri.t[0] = t0;
+    tri.t[1] = t1;
+    tri.t[2] = t2;
+    // Compute circumcircle - good luck working this one out
+    glm::vec2 d01 = p0 - p1, d12 = p1 - p2;
+    tri.cc = 0.5f * (glm::dot(p1 + p2, d12) * VEC2_YX(d01) - glm::dot(p0 + p1, d01) * VEC2_YX(d12)) / (d12 * VEC2_YX(d01) - d01 * VEC2_YX(d12));
+    tri.cr = glm::distance(tri.cc, p0);
+
+    tris.push_back(tri);
+}
+
+static inline constexpr bool triangleContainsEdge(Triangle& tri, uint32_t e0, uint32_t e1) {
+    if (tri.t[0] != e0 && tri.t[1] != e0 && tri.t[2] != e0) return false;
+    return (tri.t[0] == e1 || tri.t[1] == e1 || tri.t[2] == e1);
+}
+
+static uint8_t findTriangleTexcoord(std::vector<SimpleVertex2d>& points, Triangle* tri, glm::vec2 target) {
+    if (glm::distance(points[tri->t[0]].texcoord, target) < 1e-6) return 0;
+    if (glm::distance(points[tri->t[1]].texcoord, target) < 1e-6) return 1;
+    if (glm::distance(points[tri->t[2]].texcoord, target) < 1e-6) return 2;
+    return 255;
+}
+
+static inline void replaceVertexTexcoord(std::vector<SimpleVertex2d>& points, Triangle* tri, uint8_t idx, glm::vec2 target) {
+    SimpleVertex2d vert = {points[tri->t[idx]].pos2d, target};
+    tri->t[idx] = points.size();
+    points.push_back(vert);
+}
+
+static void repairTriangleTexcoord(std::vector<SimpleVertex2d>& points, Triangle* tri, glm::vec2* targets) {
+    uint8_t idx0 = findTriangleTexcoord(points, tri, targets[0]);
+    uint8_t idx1 = findTriangleTexcoord(points, tri, targets[1]);
+    uint8_t idx2 = findTriangleTexcoord(points, tri, targets[2]);
+    if ((idx0 == 255 ? 1 : 0) + (idx1 == 255 ? 1 : 0) + (idx2 == 255 ? 1 : 0) > 1) {
+        printf("Warning: Failed to repair triangle texture coordinate data - possible texcoord heuristic failure.\n");
+        return;
+    }
+    if (idx0 == 255) replaceVertexTexcoord(points, tri, 3 - idx1 - idx2, targets[0]);
+    if (idx1 == 255) replaceVertexTexcoord(points, tri, 3 - idx0 - idx2, targets[1]);
+    if (idx2 == 255) replaceVertexTexcoord(points, tri, 3 - idx0 - idx1, targets[2]);
+}
+
+// Use Bowyer-Watson algorithm to build Delaunay triangulation
+static float triangulate(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris) {
+    // Bounding triangle
+    glm::vec2 bbox_min = glm::vec2(1.f / 0.f);
+    glm::vec2 bbox_max = glm::vec2(-1.f / 0.f);
+    for (SimpleVertex2d pt : points) {
+        if (pt.pos2d.x < bbox_min.x) bbox_min.x = pt.pos2d.x;
+        if (pt.pos2d.y < bbox_min.y) bbox_min.y = pt.pos2d.y;
+        if (pt.pos2d.x > bbox_max.x) bbox_max.x = pt.pos2d.x;
+        if (pt.pos2d.y > bbox_max.y) bbox_max.y = pt.pos2d.y;
+    }
+    glm::vec2 bbox_pad = 0.2f * (bbox_max - bbox_min);
+    bbox_min -= bbox_pad;
+    bbox_max += bbox_pad;
+    points.push_back({glm::vec2(1.5f * bbox_min.x - 0.5f * bbox_max.x, bbox_min.y), glm::vec2(0)});
+    points.push_back({glm::vec2(1.5f * bbox_max.x - 0.5f * bbox_min.x, bbox_min.y), glm::vec2(0)});
+    points.push_back({glm::vec2(0.5f * bbox_min.x + 0.5f * bbox_max.x, 2.f * bbox_max.y - bbox_min.y), glm::vec2(0)});
+    pushTriangle(points, tris, points.size() - 3, points.size() - 2, points.size() - 1);
+
+    std::vector<Triangle> badtris;
+    for (uint32_t idx = 0; idx < points.size() - 3; idx++) {
+        glm::vec2 pt = points[idx].pos2d;
+        for (uint32_t tridx = tris.size() - 1; tridx < tris.size(); tridx--) {
+            Triangle* tri = &tris[tridx];
+            if (glm::distance(pt, tri->cc) <= tri->cr) {
+                badtris.push_back(*tri);
+                tris[tridx] = tris[tris.size() - 1];
+                tris.pop_back();
+            }
+        }
+
+        for (uint32_t tridx = 0; tridx < badtris.size(); tridx++) {
+            Triangle* tri = &badtris[tridx];
+            const uint32_t* e0 = tri->t;
+            const uint32_t e1[3] = {e0[1], e0[2], e0[0]};
+            for (uint8_t i = 0; i < 3; i++) {
+                bool edgeNotShared = true;
+                for (uint32_t tridx2 = 0; tridx2 < badtris.size(); tridx2++) {
+                    if (tridx2 == tridx) continue;
+                    if (triangleContainsEdge(badtris[tridx2], e0[i], e1[i])) {
+                        edgeNotShared = false;
+                        break;
+                    }
+                }
+                if (edgeNotShared) {
+                    pushTriangle(points, tris, idx, e0[i], e1[i]);
+                }
+            }
+        }
+        badtris.clear();
+    }
+
+    return bbox_max.x;  // For triangle filtering later
+}
+
+static void addUniqueIndex(std::vector<uint32_t>& vec, uint32_t idx) {
+    for (uint32_t i = 0; i < vec.size(); i++) {
+        if (vec[i] == idx) return;
+    }
+    vec.push_back(idx);
+}
+
+struct MonotoneIndexComparator {
+    MonotoneIndexComparator(std::vector<SimpleVertex2d>* points, glm::vec2 q1, glm::vec2 q2) {
+        this->q1 = q1;
+        this->q2 = q2;
+        this->points = points;
+    }
+    bool operator()(uint32_t i1, uint32_t i2) {
+        float d1 = glm::dot(points->at(i1).pos2d - q1, q2 - q1);
+        float d2 = glm::dot(points->at(i2).pos2d - q1, q2 - q1);
+        return (d1 <= d2);
+    }
+    std::vector<SimpleVertex2d>* points;
+    glm::vec2 q1, q2;
+};
+
+void fillMonotone(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, std::vector<uint32_t>& chain, float fillsign) {
+    std::vector<uint32_t> stack;
+    for (uint32_t idx : chain) {
+        while (stack.size() >= 2) {
+            glm::vec2 d1 = points[stack[stack.size() - 1]].pos2d - points[stack[stack.size() - 2]].pos2d;
+            glm::vec2 d2 = points[idx].pos2d - points[stack[stack.size() - 1]].pos2d;
+            if (cross2d(d1, d2) * fillsign < 0) break;
+            pushTriangle(points, tris, stack[stack.size() - 2], stack[stack.size() - 1], idx);
+            stack.pop_back();
+        }
+        stack.push_back(idx);
+    }
+    if (stack.size() != 2) {
+        printf("Warning: Invalid stack state after fillMonotone during edge cut TTF processing phase.\n");
+    }
+}
+
+// Cut across the Delaunay triangulation to enforce polygon edges
+static void cutEdge(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, uint32_t f0, uint32_t f1) {
+    std::vector<uint32_t> chain1;  // While asymptotically faster, std::unordered_set would
+    std::vector<uint32_t> chain2;  // introduce unnecessary overhead for sets this small
+    chain1.push_back(f0);
+    chain2.push_back(f0);
+    glm::vec2 q1 = points[f0].pos2d, q2 = points[f1].pos2d;
+    MonotoneIndexComparator comp(&points, q1, q2);
+    for (uint32_t tridx = tris.size() - 1; tridx < tris.size(); tridx--) {
+        Triangle* tri = &tris[tridx];
+        const uint32_t* e0 = tri->t;
+        const uint32_t e1[3] = {e0[1], e0[2], e0[0]};
+        for (uint8_t i = 0; i < 3; i++) {
+            glm::vec2 p1 = points[e0[i]].pos2d, p2 = points[e1[i]].pos2d;
+            if (intersectionTest(p1, p2, q1, q2, 1e-4)) {
+                for (uint8_t j = 0; j < 3; j++) {
+                    float c2d = cross2d(points[e0[j]].pos2d - q1, q2 - q1);
+                    if (c2d < -1e-6) addUniqueIndex(chain1, e0[j]);
+                    if (c2d > 1e-6) addUniqueIndex(chain2, e0[j]);
+                }
+                tris[tridx] = tris[tris.size() - 1];
+                tris.pop_back();
+                break;
+            }
+        }
+    }
+    std::sort(chain1.begin() + 1, chain1.end(), comp);
+    std::sort(chain2.begin() + 1, chain2.end(), comp);
+    chain1.push_back(f1);
+    chain2.push_back(f1);
+    fillMonotone(points, tris, chain1, -1.f);
+    fillMonotone(points, tris, chain2, 1.f);
+}
+
+static inline uint32_t getNextPoint(std::vector<uint32_t>& contours, uint32_t cnt, uint32_t pt) {
+    return (pt < contours[cnt]) ? (pt + 1) : ((cnt == 0) ? 0 : (contours[cnt - 1] + 1));
+}
+
+static inline uint32_t getPrevPoint(std::vector<uint32_t>& contours, uint32_t cnt, uint32_t pt) {
+    return (pt > ((cnt == 0) ? 0 : (contours[cnt - 1] + 1))) ? (pt - 1) : contours[cnt];
+}
+
 TextFont::TextFont(VulkanContext* ctx, const char* ttf) {
     char* buf = ctx->buildAssetLoadPath(ttf);
     std::vector<char> ttfContents = lepton2::utils::readFile(buf);
@@ -446,10 +664,17 @@ bool TextFont::containsGlyph(uint32_t codepoint) {
     return (glyphIndex != 0);
 }
 
+// #define GLYPH_LOAD_PROFILING
+
 ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
     if (glyphMap.count(codepoint) > 0) {
         return glyphMap[codepoint];  // I'm so dynamic
     }
+
+#ifdef GLYPH_LOAD_PROFILING
+    lepton2::utils::lepton2_time_point start_time = lepton2::utils::startTiming();
+    printf("Start building glyph for codepoint %u\n", codepoint);
+#endif
 
     ProcessedGlyph* glyph = new ProcessedGlyph();
     uint32_t glyphIndex = parser->cmap.getGlyphIndex(codepoint);
@@ -457,17 +682,237 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
 
     size_t glyfPtr = parser->loca.glyphOffsets[glyphIndex];
 
-    if (glyfPtr != UINT32_MAX) {
-        TTFGlyph glyph_raw(parser->glyfData, &glyfPtr);
+    if (glyfPtr == UINT32_MAX) {
+        glyph->objData = nullptr;
+        glyphMap[codepoint] = glyph;
+        return glyph;
+    }
 
-        glyph->onCurve = glyph_raw.onCurve;
+    TTFGlyph glyph_raw(parser->glyfData, &glyfPtr);
 
-        glyph->coords.resize(glyph_raw.onCurve.size());
-        for (uint32_t i = 0; i < glyph_raw.onCurve.size(); i++) {
-            glyph->coords[i].x = 0.5f - parser->head.applyScale(glyph_raw.xCoords[i]);
-            glyph->coords[i].y = 0.5f - parser->head.applyScale(glyph_raw.yCoords[i]);
+    std::vector<SimpleVertex2d> coords;
+    std::vector<bool> onCurve;
+    onCurve.reserve(glyph_raw.onCurve.size());
+    coords.reserve(glyph_raw.onCurve.size());
+
+    std::vector<uint32_t> endIndices;
+    endIndices.resize(glyph_raw.contourEndIndices.size());
+
+    // Add implied on-curve points and apply coordinate transforms
+    uint32_t contourStart = 0;
+    for (uint32_t cnt = 0; cnt < glyph_raw.contourEndIndices.size(); cnt++) {
+        uint32_t contourEnd = glyph_raw.contourEndIndices[cnt];
+        for (uint32_t i = contourStart; i <= contourEnd; i++) {
+            glm::vec2 point = glyph_raw.getPoint(i, parser->head);
+            coords.push_back({point, glm::vec2(0.5f)});
+            onCurve.push_back(glyph_raw.onCurve[i]);
+            if (glyph_raw.onCurve[i] || i == contourEnd || glyph_raw.onCurve[i + 1]) continue;
+            glm::vec2 nextpoint = glyph_raw.getPoint(i + 1, parser->head);
+            coords.push_back({0.5f * (point + nextpoint), glm::vec2(0.5f)});
+            onCurve.push_back(true);
+        }
+        if (!glyph_raw.onCurve[contourStart] && !glyph_raw.onCurve[contourEnd]) {
+            glm::vec2 point1 = glyph_raw.getPoint(contourStart, parser->head);
+            glm::vec2 point2 = glyph_raw.getPoint(contourEnd, parser->head);
+            coords.push_back({0.5f * (point1 + point2), glm::vec2(0.5f)});
+            onCurve.push_back(true);
+        }
+        contourStart = contourEnd + 1;
+        endIndices[cnt] = coords.size() - 1;
+    }
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Generated implied polygon at %lf seconds\n", lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    std::vector<Triangle> tris;
+    float bbox_max_x = triangulate(coords, tris);
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Built %u Delaunay triangles at %lf seconds\n", tris.size(), lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    uint32_t cstart = 0;
+    // Definitely the step which should be optimized using quadtree location techniques
+    for (uint32_t cnt = 0; cnt < endIndices.size(); cnt++) {
+        for (uint32_t t = cstart; t < endIndices[cnt] + 1; t++) {
+            uint32_t next = getNextPoint(endIndices, cnt, t);
+            cutEdge(coords, tris, t, next);
+            if (!onCurve[next]) cutEdge(coords, tris, t, getNextPoint(endIndices, cnt, next));
+        }
+        cstart = endIndices[cnt] + 1;
+    }
+
+    coords.resize(coords.size() - 3);  // Remove bounding triangle points
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Completed edge cuts at %lf seconds\n", lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    std::vector<std::pair<glm::vec2, glm::vec2>> edgesSet1;
+    std::vector<std::pair<glm::vec2, glm::vec2>> edgesSet2;
+
+    cstart = 0;
+    for (uint32_t cnt = 0; cnt < endIndices.size(); cnt++) {
+        uint32_t prevIdx = UINT32_MAX, firstIdx = UINT32_MAX;
+        bool texState = false;
+        for (uint32_t t = cstart; t != firstIdx; t = getNextPoint(endIndices, cnt, t)) {
+            if (!onCurve[t]) {
+                texState = !texState;
+                continue;
+            }
+            if (prevIdx != UINT32_MAX) {
+                if (firstIdx == UINT32_MAX) firstIdx = t;
+                coords[t].texcoord = glm::vec2((texState ? 0.75f : 0.25f), 0.5f);
+                edgesSet1.push_back({coords[t].pos2d, coords[prevIdx].pos2d});
+            }
+            prevIdx = t;
+        }
+        prevIdx = UINT32_MAX, firstIdx = UINT32_MAX;
+        for (uint32_t t = cstart; t != firstIdx; t = getNextPoint(endIndices, cnt, t)) {
+            if (onCurve[t]) {
+                if (!onCurve[getNextPoint(endIndices, cnt, t)] && !onCurve[getPrevPoint(endIndices, cnt, t)]) {
+                    continue;
+                }
+            }
+            if (prevIdx != UINT32_MAX) {
+                if (firstIdx == UINT32_MAX) firstIdx = t;
+                edgesSet2.push_back({coords[t].pos2d, coords[prevIdx].pos2d});
+            }
+            prevIdx = t;
+        }
+        cstart = endIndices[cnt] + 1;
+    }
+
+    std::vector<uint8_t> triangleFlags;
+    triangleFlags.resize(tris.size());
+    for (uint32_t i = 0; i < tris.size(); i++) {
+        Triangle* tri = &tris[i];
+        triangleFlags[i] = 0;
+        if (tri->t[0] >= coords.size() || tri->t[1] >= coords.size() || tri->t[2] >= coords.size()) {
+            continue;
+        }
+        glm::vec2 p1 = (coords[tri->t[0]].pos2d + coords[tri->t[1]].pos2d + coords[tri->t[2]].pos2d) / 3.f;
+        glm::vec2 p2 = glm::vec2(bbox_max_x, p1.y);
+        p1 += glm::vec2(0.f, 1e-4f);
+
+        uint32_t intersections1 = 0;
+        uint32_t intersections2 = 0;
+
+        for (std::pair<glm::vec2, glm::vec2> e : edgesSet1) {
+            if (intersectionTest(p1, p2, e.first, e.second, 0.f)) intersections1++;
+        }
+
+        for (std::pair<glm::vec2, glm::vec2> e : edgesSet2) {
+            if (intersectionTest(p1, p2, e.first, e.second, 0.f)) intersections2++;
+        }
+
+        if ((intersections1 & 1) > 0) triangleFlags[i] |= 1;
+        if ((intersections2 & 1) > 0) triangleFlags[i] |= 2;
+    }
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Completed tri flagging at %lf seconds\n", lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    for (uint32_t i = tris.size() - 1; i < tris.size(); i--) {
+        if (triangleFlags[i] == 0) {
+            tris[i] = tris[tris.size() - 1];
+            triangleFlags[i] = triangleFlags[tris.size() - 1];
+            tris.pop_back();
+            triangleFlags.pop_back();
+        } else if (triangleFlags[i] != 3) {
+            const uint32_t verts[3] = {tris[i].t[0], tris[i].t[1], tris[i].t[2]};
+            for (uint32_t vert : verts) {
+                if (coords[vert].texcoord.y != 0.5f) continue;
+                if (fabs(coords[vert].texcoord.x - 0.5f) < 0.125f) {
+                    coords[vert].texcoord = glm::vec2((triangleFlags[i] == 2) ? 1.f : 0.5f);
+                    continue;
+                } else if (fabs(coords[vert].texcoord.x - 0.5f) > 0.375f) {
+                    continue;
+                }
+                if (triangleFlags[i] == 2) {
+                    coords[vert].texcoord = (coords[vert].texcoord.x > 0.5f) ? glm::vec2(1.f, 0.5f) : glm::vec2(0.5f, 1.f);
+                } else {
+                    coords[vert].texcoord = (coords[vert].texcoord.x > 0.5f) ? glm::vec2(0.5f, 0.f) : glm::vec2(0.f, 0.5f);
+                }
+            }
         }
     }
+
+    for (uint32_t vert = 0; vert < coords.size(); vert++) {
+        if (coords[vert].texcoord.y != 0.5f) continue;
+        if (fabs(coords[vert].texcoord.x - 0.5f) < 0.375f) {
+            coords[vert].texcoord = glm::vec2(0.5f);
+        }
+    }
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Completed texcoord heuristic at %lf seconds\n", lepton2::utils::getElapsedSeconds(start_time));
+    uint32_t initialCoordsSize = coords.size();
+#endif
+
+    // This simple approach may introduce some duplicate vertices. Further deduplication or some sort of
+    // candidate repair match detection system could be implemented if willing to go even more insane.
+    for (uint32_t tridx = 0; tridx < tris.size(); tridx++) {
+        Triangle* tri = &tris[tridx];
+        switch (triangleFlags[tridx]) {
+            case 1: {
+                glm::vec2 targets[3] = {{0.f, 0.5f}, {0.5f, 0.f}, {0.5f, 0.5f}};
+                repairTriangleTexcoord(coords, tri, targets);
+                continue;
+            }
+            case 2: {
+                glm::vec2 targets[3] = {{1.f, 0.5f}, {0.5f, 1.f}, {1.f, 1.f}};
+                repairTriangleTexcoord(coords, tri, targets);
+                continue;
+            }
+            case 3: {
+                for (uint8_t j = 0; j < 3; j++) {
+                    if (glm::distance(coords[tri->t[j]].texcoord, glm::vec2(1.f, 1.f)) < 1e-6) {
+                        replaceVertexTexcoord(coords, tri, j, glm::vec2(0.5f));
+                    }
+                }
+                uint8_t idx05 = findTriangleTexcoord(coords, tri, glm::vec2(0.f, 0.5f));
+                uint8_t idx50 = findTriangleTexcoord(coords, tri, glm::vec2(0.5f, 0.f));
+                if (idx05 != 255 && idx50 != 255) {
+                    replaceVertexTexcoord(coords, tri, idx05, glm::vec2(0.5f));
+                }
+                continue;
+            }
+        }
+    }
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Completed %u conflicted vertex duplications at %lf seconds\n", (uint32_t)coords.size() - initialCoordsSize, lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    std::vector<uint32_t> indices;
+    indices.resize(3 * tris.size());
+    for (uint32_t i = 0; i < tris.size(); i++) {
+        indices[3 * i + 0] = tris[i].t[0];
+        float a = cross2d(coords[tris[i].t[1]].pos2d - coords[tris[i].t[0]].pos2d,
+                          coords[tris[i].t[2]].pos2d - coords[tris[i].t[1]].pos2d);
+        if (a < 0) {  // Allow culling (not strictly necessary with pipeline modifications)
+            indices[3 * i + 1] = tris[i].t[1];
+            indices[3 * i + 2] = tris[i].t[2];
+        } else {
+            indices[3 * i + 1] = tris[i].t[2];
+            indices[3 * i + 2] = tris[i].t[1];
+        }
+    }
+
+    HostObjectData* hostObjData = new HostObjectData(coords.data(), coords.size() * sizeof(SimpleVertex2d), indices);
+
+#ifdef GLYPH_LOAD_PROFILING
+    printf("Built CPU-side glyph data in %lf seconds\n", lepton2::utils::getElapsedSeconds(start_time));
+#endif
+
+    DeviceObjectData* data = new DeviceObjectData(ctx, hostObjData);
+    hostObjData->destroy(ctx);
+    delete hostObjData;
+
+    glyph->objData = data;
 
     glyphMap[codepoint] = glyph;
     return glyph;

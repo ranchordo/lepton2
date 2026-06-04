@@ -16,7 +16,7 @@ struct VertexStructDescriptor {
 
 struct HostObjectData : public DeletableVulkanResource {
     // Will delete internal vertex buffer ptr on destruction.
-    HostObjectData(void* _vertices, size_t _vsize, std::vector<uint32_t> _indices, bool gen_copy = true) {
+    HostObjectData(void* _vertices, size_t _vsize, const std::vector<uint32_t>& _indices, bool gen_copy = true) {
         if (gen_copy) {
             this->vertices = malloc(_vsize);
             memcpy(this->vertices, _vertices, _vsize);

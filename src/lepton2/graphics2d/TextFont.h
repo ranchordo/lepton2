@@ -2,21 +2,26 @@
 
 #include "../utils/LeptonUtils.h"
 #include "../vulkancore/VulkanContext.h"
-#include "Entity2d.h"
+#include "../vulkancore/ObjectData.h"
 
 namespace lepton2::graphics2d {
 
+namespace vkc = lepton2::vulkancore;
+
+//! Holds a glyph retrieved from a TextFont - basically a lepton2::vulkancore::DeviceObjectData with misc glyph info.
 struct ProcessedGlyph {
-    std::vector<glm::vec2> coords;
-    std::vector<bool> onCurve;
+    vkc::DeviceObjectData* objData;
     float advanceWidth;
 
     void destroy(vkc::VulkanContext* ctx) {
-        // Do nothing
+        objData->destroy(ctx);
     }
 };
 
+//! Internal logic for font parsing.
 class TTFParser;
+
+//! TTF loader which generates triangulated true vector glyphs using a shader trick.
 class TextFont : public vkc::DeletableVulkanResource {
     public:
     TextFont(vkc::VulkanContext* ctx, const char* ttf);

@@ -56,7 +56,7 @@ void printFreeList(MemoryChonkus* chonkus) {
 #endif
 
 VkDeviceSize getNewSize(VkDeviceSize reqAllocSize) {
-    VkDeviceSize candidate1 = 64 * 1024 * 1024;
+    VkDeviceSize candidate1 = 64 * 1024;
     VkDeviceSize candidate2 = reqAllocSize * 4;
     if (candidate1 > candidate2) {
         return candidate1;
@@ -87,6 +87,12 @@ MemoryChonklet VulkanAllocationManager::findMemory(VulkanContext* ctx, VkDeviceS
             selectedChonkus = allChonki[i];
             cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
             if (cEntry != nullptr) {
+                for (uint32_t j = 0; j < unusedChonki.size(); j++) {
+                    if (unusedChonki[j] != selectedChonkus) continue;
+                    unusedChonki[j] = unusedChonki[unusedChonki.size() - 1];
+                    unusedChonki.pop_back();
+                    break;
+                }
                 break;
             }
         }
@@ -132,6 +138,7 @@ MemoryChonklet VulkanAllocationManager::findMemory(VulkanContext* ctx, VkDeviceS
     printFreeList(selectedChonkus);
     printf("\n");
 #endif
+    selectedChonkus->lastUseTime = lepton2::utils::startTiming();
     MemoryChonklet ret;
     ret.chonkus = selectedChonkus;
     ret.offset = cEntry->offset;
@@ -254,7 +261,7 @@ void VulkanAllocationManager::freeChonklet(VulkanContext* ctx, MemoryChonklet ch
                     printFreeList(chonklet.chonkus);
                     printf("\n");
 #endif
-                    this->checkChonkusDeletion(ctx, chonklet.chonkus);
+                    this->checkChonkusUnused(ctx, chonklet.chonkus);
                     return;
                 }
                 current2 = current2->next;
@@ -262,7 +269,7 @@ void VulkanAllocationManager::freeChonklet(VulkanContext* ctx, MemoryChonklet ch
 #ifdef DEBUG_MEMORY_MANAGER
             printf("No secondary coalescence.\n");
 #endif
-            this->checkChonkusDeletion(ctx, chonklet.chonkus);
+            this->checkChonkusUnused(ctx, chonklet.chonkus);
             return;
         }
         current = current->next;
@@ -282,7 +289,7 @@ void VulkanAllocationManager::freeChonklet(VulkanContext* ctx, MemoryChonklet ch
             printFreeList(chonklet.chonkus);
             printf("\n");
 #endif
-            this->checkChonkusDeletion(ctx, chonklet.chonkus);
+            this->checkChonkusUnused(ctx, chonklet.chonkus);
             return;
         }
         current = current->next;
@@ -296,44 +303,59 @@ void VulkanAllocationManager::freeChonklet(VulkanContext* ctx, MemoryChonklet ch
     printFreeList(chonklet.chonkus);
     printf("\n");
 #endif
-    this->checkChonkusDeletion(ctx, chonklet.chonkus);
+    this->checkChonkusUnused(ctx, chonklet.chonkus);
 }
 
-void VulkanAllocationManager::checkChonkusDeletion(VulkanContext* ctx, MemoryChonkus* chonkus) {
+void VulkanAllocationManager::checkChonkusUnused(VulkanContext* ctx, MemoryChonkus* chonkus) {
+    do {
 #ifdef DEBUG_MEMORY_MANAGER
-    printf("Checking for deletion condition for chonkus with type %d\n", (int)chonkus->memory_type);
+        printf("Checking for deletion condition for chonkus with type %d\n", (int)chonkus->memory_type);
 #endif
-    if (chonkus->entry == nullptr) {
+        if (chonkus->entry == nullptr) {
 #ifdef DEBUG_MEMORY_MANAGER
-        printf("No free blocks. Nope.\n");
+            printf("No free blocks. Nope.\n");
 #endif
-        return;
+            break;
+        }
+        if (chonkus->entry->next != nullptr) {
+#ifdef DEBUG_MEMORY_MANAGER
+            printf("Too many free blocks. Nope.\n");
+#endif
+            break;
+        }
+        if (chonkus->entry->size != chonkus->allocationSize) {
+#ifdef DEBUG_MEMORY_MANAGER
+            printf("Free block too small. Nope.\n");
+#endif
+            break;
+        }
+#ifdef DEBUG_MEMORY_MANAGER
+        printf("Conditions met. Marking this chonkus unused...\n");
+#endif
+        chonkus->lastUseTime = lepton2::utils::startTiming();
+        this->unusedChonki.push_back(chonkus);
+    } while (false);
+    this->purgeUnusedChonki(ctx, false);
+}
+
+void VulkanAllocationManager::purgeUnusedChonki(VulkanContext* ctx, bool overrideTimeout) {
+    double timeout = overrideTimeout ? -1.0 : this->cleanupTimeout;
+    for (uint32_t i = 0; i < unusedChonki.size(); i++) {
+        MemoryChonkus* chonkus = unusedChonki[i];
+        if (lepton2::utils::getElapsedSeconds(chonkus->lastUseTime) >= timeout) {
+            unusedChonki[i] = unusedChonki[unusedChonki.size() - 1];
+            unusedChonki.pop_back();
+            this->doChonkusDeletion(ctx, chonkus);
+        }
     }
-    if (chonkus->entry->next != nullptr) {
-#ifdef DEBUG_MEMORY_MANAGER
-        printf("Too many free blocks. Nope.\n");
-#endif
-        return;
-    }
-    if (chonkus->entry->size != chonkus->allocationSize) {
-#ifdef DEBUG_MEMORY_MANAGER
-        printf("Free block too small. Nope.\n");
-#endif
-        return;
-    }
-#ifdef DEBUG_MEMORY_MANAGER
-    printf("Conditions met. Deleting this chonkus...\n");
-#endif
+}
+
+void VulkanAllocationManager::doChonkusDeletion(VulkanContext* ctx, MemoryChonkus* chonkus) {
     std::vector<MemoryChonkus*>& allChonki = this->chonki[chonkus->memory_type];
     for (uint32_t i = 0; i < allChonki.size(); i++) {
         if (allChonki[i] == chonkus) {
-#ifdef DEBUG_MEMORY_MANAGER
-            printf("Deleting chonkus with index %d, old length is %d, ", (int)i, (int)allChonki.size());
-#endif
-            allChonki.erase(allChonki.begin() + i);
-#ifdef DEBUG_MEMORY_MANAGER
-            printf("new length is %d\n", (int)allChonki.size());
-#endif
+            allChonki[i] = allChonki[allChonki.size() - 1];
+            allChonki.pop_back();
             chonkus->destroy_back(ctx);
             delete chonkus;
             return;
@@ -343,6 +365,7 @@ void VulkanAllocationManager::checkChonkusDeletion(VulkanContext* ctx, MemoryCho
 }
 
 void VulkanAllocationManager::destroy_back(VulkanContext* ctx) {
+    this->purgeUnusedChonki(ctx, true);
     for (auto& x : this->chonki) {
         std::vector<MemoryChonkus*>& vec = x.second;
         for (MemoryChonkus* c : vec) {

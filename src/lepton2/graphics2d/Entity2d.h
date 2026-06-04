@@ -8,6 +8,14 @@ namespace lepton2::graphics2d {
 namespace gph = lepton2::graphics;
 namespace vkc = lepton2::vulkancore;
 
+struct SimpleVertex2d {
+    glm::vec2 pos2d;
+    glm::vec2 texcoord;
+};
+
+//! Vertex structure with a 2d position and 2d texture coordinate.
+extern vkc::VertexStructDescriptor simpleVsd2d;
+
 struct Region2d {
     glm::vec2 xyPos = glm::vec2(0.0f, 0.0f);
     glm::vec2 halfExtent = glm::vec2(0.5f, 0.5f);
@@ -88,6 +96,8 @@ class Entity2d : public gph::GraphicalEntity {
         }
     }
 
+    void removeAllChildren() { children.clear(); }
+
     void setAspectControlMode(AspectControlMode2d acm2d) { this->alignmentMode.aspectControl = acm2d; }
     void setHorizontalAlignment(HorizontalAlignmentMode2d ham2d) { this->alignmentMode.horiz = ham2d; }
     void setVerticalAlignment(VerticalAlignmentMode2d vam2d) { this->alignmentMode.vert = vam2d; }
@@ -109,6 +119,8 @@ class Entity2d : public gph::GraphicalEntity {
 
     void useRectangleGeometry(vkc::VulkanContext* ctx);
     void setTexture(vkc::Texture* texture) { this->texture = texture; }
+    void setVsd(vkc::VertexStructDescriptor& vsd) { this->vsd = vsd; }
+    virtual void modifyPipelineRequirements(vkc::GraphicsPipelineConstraints* req) {}
     virtual void logic(vkc::VulkanContext* ctx) {};
     virtual void destroy2d(vkc::VulkanContext* ctx) {};
 

@@ -5,7 +5,10 @@
 #include <fstream>
 #include <vector>
 
-#include "../vulkancore/ObjectData.h"
+namespace lepton2::vulkancore {
+class HostObjectData;
+class VulkanContext;
+}  // namespace lepton2::vulkancore
 
 namespace lepton2::utils {
 

@@ -2,7 +2,7 @@
 
 # Base build procedure #
 
-BASECFLAGS = -std=c++17 -O0
+BASECFLAGS = -std=c++17 -O3
 
 BASE_OUTPUT ?= lepton2_main
 
@@ -52,7 +52,7 @@ clean_resources:
 
 # Test native build #
 
-test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV -g
+test: CFLAGS = $(BASECFLAGS) -D DEBUG_ENV -gdwarf-4
 test: LDFLAGS = -lglfw -lvulkan
 test: OUTPUT = build/output/$(BASE_OUTPUT)
 test: build_base assets

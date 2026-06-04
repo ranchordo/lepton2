@@ -19,6 +19,7 @@ void GraphicalEntity::initialize(VulkanContext* ctx, RenderPass* renderState, Re
 }
 
 void GraphicalEntity::render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t setidx) {
+    if (!active) return;
     this->preRenderCmd(commandBuffer, frameIndex, setidx);
     if (this->numInstances == 0) {
         return;

@@ -8,11 +8,17 @@ using namespace lepton2::graphics2d;
 using namespace lepton2::vulkancore;
 using namespace lepton2::graphics::graphicalpresets;
 
-static std::vector<SimplePresetVertex> rectangleVertices = {
-    {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{+1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{+1.0f, +1.0f, 0.0f}, {1.0f, 1.0f}},
-    {{-1.0f, +1.0f, 0.0f}, {0.0f, 1.0f}}};
+namespace lepton2::graphics2d {
+VertexStructDescriptor simpleVsd2d = {{{offsetof(SimpleVertex2d, pos2d), VK_FORMAT_R32G32_SFLOAT},
+                                       {offsetof(SimpleVertex2d, texcoord), VK_FORMAT_R32G32_SFLOAT}},
+                                      sizeof(SimpleVertex2d)};
+};
+
+static std::vector<SimpleVertex2d> rectangleVertices = {
+    {{-1.0f, -1.0f}, {0.0f, 0.0f}},
+    {{+1.0f, -1.0f}, {1.0f, 0.0f}},
+    {{+1.0f, +1.0f}, {1.0f, 1.0f}},
+    {{-1.0f, +1.0f}, {0.0f, 1.0f}}};
 
 static std::vector<uint32_t> rectangleIndices = {1, 0, 3, 1, 3, 2};
 
@@ -56,6 +62,7 @@ GraphicsPipelineConstraints Entity2d::getPipelineRequirements() {
         }
     }
     GraphicsPipelineConstraints ret(this->shaderName, dsli, this->vsd);
+    this->modifyPipelineRequirements(&ret);
     return ret;
 }
 
@@ -81,7 +88,7 @@ class Entity2dRectDataMonitor : public DeletableVulkanResource {
    public:
     Entity2dRectDataMonitor(VulkanContext* ctx, uint32_t* users, DeviceObjectData** data) {
         if (*data == nullptr) {
-            HostObjectData hostData(rectangleVertices.data(), rectangleVertices.size() * sizeof(SimplePresetVertex), rectangleIndices);
+            HostObjectData hostData(rectangleVertices.data(), rectangleVertices.size() * sizeof(SimpleVertex2d), rectangleIndices);
             (*data) = new DeviceObjectData(ctx, &hostData);
         }
         this->users = users;
@@ -106,7 +113,7 @@ class Entity2dRectDataMonitor : public DeletableVulkanResource {
 void Entity2d::useRectangleGeometry(VulkanContext* ctx) {
     this->addLinkedResource(new Entity2dRectDataMonitor(ctx, &Entity2d::rectUsers, &Entity2d::rectData), true);
     this->setObjectData(Entity2d::rectData);
-    this->vsd = simplePresetVsd;
+    this->setVsd(simpleVsd2d);
 }
 
 static void adjustHorizontalAlign(Region2d* bbox, Region2d* parent, HorizontalAlignmentMode2d horiz) {

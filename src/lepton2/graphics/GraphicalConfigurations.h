@@ -70,7 +70,7 @@ class SubpassGraphicalConfigurationStore : public vkc::DeletableVulkanResource {
 
    private:
     GraphicalConfiguration* createNewConfiguration(vkc::VulkanContext* ctx, vkc::RenderPass* renderState, vkc::GraphicsPipelineConstraints constraints);
-    std::unordered_map<std::string, std::unordered_set<GraphicalConfiguration*>> cache;
+    std::unordered_map<std::string, std::vector<GraphicalConfiguration*>> cache;
     std::vector<GraphicalConfiguration*> allConfigs;
     uint32_t currentIdentifier;
     vkc::RenderSubpass* parent;

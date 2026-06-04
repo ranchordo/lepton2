@@ -73,11 +73,9 @@ HostObjectData* loadObjFile(VulkanContext* ctx, const char* filename) {
                 attrib.normals[3 * index.normal_index + 1],
                 attrib.normals[3 * index.normal_index + 2]
             };
-            if (unique.count(vertex) == 0) {
-                unique[vertex] = (uint32_t)(vertices.size());
-                vertices.push_back(vertex);
-            }
-            indices.push_back(unique[vertex]);
+            auto insertion = unique.insert(std::make_pair(vertex, (uint32_t)(vertices.size())));
+            if (insertion.second) vertices.push_back(vertex);
+            indices.push_back(insertion.first->second);
         }
     }
 

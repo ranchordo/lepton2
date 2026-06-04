@@ -219,9 +219,6 @@ bool DescriptorPool::canFit(DescriptorSetArray* dsa, uint32_t quantity) {
         return false;  // Not enough space
     }
     for (auto const& pair : dsa->layoutInfo.typeCounts) {
-        if (this->sizeMap.count(pair.first) == 0) {
-            throw std::runtime_error("This descriptor pool doesn't contain a required type.");
-        }
         DescriptorPoolSizeTracker& tracker = this->sizeMap[pair.first];
         if (tracker.used + (quantity * pair.second) > tracker.totalSize) {
             return false;  // Not enough space

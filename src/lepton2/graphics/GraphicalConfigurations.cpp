@@ -53,14 +53,9 @@ GraphicalConfiguration* SubpassGraphicalConfigurationStore::createNewConfigurati
 }
 
 GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguration(VulkanContext* ctx, GraphicsPipelineConstraints constraints, GraphicalEntity* user) {
-    std::unordered_set<GraphicalConfiguration*>* selectedVector = nullptr;
-    if (this->cache.count(constraints.shaderName) == 0) {
-        std::unordered_set<GraphicalConfiguration*> newTempVector;
-        this->cache[constraints.shaderName] = newTempVector;
-        selectedVector = &this->cache[constraints.shaderName];
-    } else {
-        std::unordered_set<GraphicalConfiguration*>& candidates = this->cache[constraints.shaderName];
-        for (GraphicalConfiguration* candidate : candidates) {
+    auto insertion = this->cache.insert(std::make_pair(constraints.shaderName, std::vector<GraphicalConfiguration*>()));
+    if (!insertion.second) {
+        for (GraphicalConfiguration* candidate : insertion.first->second) {
             if (!constraints.compatible(candidate->pipeline->creationConstraints)) continue;
             GraphicalConfigurationHandle ret;
             ret.user = user;
@@ -69,10 +64,9 @@ GraphicalConfigurationHandle SubpassGraphicalConfigurationStore::getConfiguratio
             ret.config->users.push_back(user);
             return ret;
         }
-        selectedVector = &candidates;
     }
     GraphicalConfiguration* newConfiguration = this->createNewConfiguration(ctx, renderPass, constraints);
-    selectedVector->insert(newConfiguration);
+    insertion.first->second.push_back(newConfiguration);
     this->allConfigs.push_back(newConfiguration);
     GraphicalConfigurationHandle ret;
     ret.user = user;
@@ -151,9 +145,14 @@ void SubpassGraphicalConfigurationStore::dropConfigurationHandle(VulkanContext* 
         handle.config->users.pop_back();
     }
     if (handle.config->users.size() == 0) {
-        std::unordered_set<GraphicalConfiguration*>& configurations = cache[handle.config->pipeline->creationConstraints.shaderName];
-        configurations.erase(handle.config);
-        auto elem2 = std::find(allConfigs.begin(), allConfigs.end(), handle.config);
+        std::vector<GraphicalConfiguration*>& configurations = cache[handle.config->pipeline->creationConstraints.shaderName];
+        auto elem2 = std::find(configurations.begin(), configurations.end(), handle.config);
+        if (elem2 != configurations.end()) {
+            std::iter_swap(elem2, configurations.end() - 1);
+            configurations.pop_back();
+        }
+
+        elem2 = std::find(allConfigs.begin(), allConfigs.end(), handle.config);
         if (elem2 != allConfigs.end()) {
             std::iter_swap(elem2, allConfigs.end() - 1);
             allConfigs.pop_back();
@@ -176,7 +175,7 @@ void SubpassGraphicalConfigurationStore::preRenderAllConfigurations(VulkanContex
 }
 
 void SubpassGraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
-    for (std::pair<std::string, std::unordered_set<GraphicalConfiguration*>> const& pair : this->cache) {
+    for (std::pair<std::string, std::vector<GraphicalConfiguration*>> const& pair : this->cache) {
         for (GraphicalConfiguration* config : pair.second) {
             config->destroy(ctx);
             delete config;
@@ -186,13 +185,13 @@ void SubpassGraphicalConfigurationStore::destroy_back(VulkanContext* ctx) {
 }
 
 void GraphicalConfigurationStore::addAllSubpasses(RenderPass* pass) {
-    if (this->subpassStores.count(pass) > 0) return;
-    std::vector<SubpassGraphicalConfigurationStore*> stores(pass->numSubpasses());
+    auto insertion = this->subpassStores.insert(std::make_pair(pass, std::vector<SubpassGraphicalConfigurationStore*>()));
+    if (!insertion.second) return;
+    insertion.first->second.resize(pass->numSubpasses());
     for (uint32_t i = 0; i < pass->numSubpasses(); i++) {
         SubpassGraphicalConfigurationStore* store = new SubpassGraphicalConfigurationStore(pass->getNode(i), pass);
         this->addLinkedResource(store, true);
-        stores[i] = store;
+        insertion.first->second[i] = store;
         pass->getNode(i)->setRenderCallback(store->getRenderCallback());
     }
-    subpassStores[pass] = stores;
 }

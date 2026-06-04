@@ -168,9 +168,7 @@ HostObjectData* buildGenericWavefrontObj(VulkanContext* ctx, uint32_t* pfx, uint
         VertexReference vref{};
         vref.ptr = fd.data() + i;
         vref.size = vsize;
-        if (vertmap.count(vref) == 0) {
-            vertmap[vref] = vertmap.size();
-        }
+        vertmap.insert(std::make_pair(vref, vertmap.size()));
         indices.push_back(vertmap[vref]);
     }
 

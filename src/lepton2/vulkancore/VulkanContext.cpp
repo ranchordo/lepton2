@@ -191,17 +191,17 @@ SwapchainSupportDetails VulkanContext::querySwapchainSupport(VkPhysicalDevice de
 }
 
 int VulkanContext::calculateDeviceScore(VkPhysicalDevice device) {
-#define do_absolute_criterion(namestr, test)                                                                                                        \
-    {                                                                                                                                               \
-        bool result = isSuitable && (test);                                                                                                         \
+#define do_absolute_criterion(namestr, test)                                                                                                      \
+    {                                                                                                                                             \
+        bool result = isSuitable && (test);                                                                                                       \
         if (this->printDebugInfo) printf(" --> Necessary criterion - %s: %s.\n", namestr, result ? "YES" : (isSuitable ? "NO" : "Not checking")); \
-        isSuitable = isSuitable && result;                                                                                                          \
+        isSuitable = isSuitable && result;                                                                                                        \
     }
-#define do_score_criterion(namestr, weight, value)                                                                                                                      \
-    {                                                                                                                                                                   \
-        int result = (value);                                                                                                                                           \
+#define do_score_criterion(namestr, weight, value)                                                                                                                    \
+    {                                                                                                                                                                 \
+        int result = (value);                                                                                                                                         \
         if (this->printDebugInfo) printf(" --> Scored criterion, weight %.2f - %s: %.2f --> %.2f.\n", float(weight), namestr, float(result), float(result * weight)); \
-        totalScore += result * weight;                                                                                                                                  \
+        totalScore += result * weight;                                                                                                                                \
     }
 
     VkPhysicalDeviceProperties deviceProperties;
@@ -262,14 +262,21 @@ void VulkanContext::pickPhysicalDevice() {
     }
 }
 
+static void addUniqueIndex(std::vector<uint32_t>& vec, uint32_t idx) {
+    for (uint32_t i = 0; i < vec.size(); i++) {
+        if (vec[i] == idx) return;
+    }
+    vec.push_back(idx);
+}
+
 void VulkanContext::createLogicalDevice() {
     QueueFamilyIndices indices = this->findQueueFamilies(this->physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::unordered_set<uint32_t> uniqueQueueFamilies;
-    if (indices.graphicsComputeFamily.has_value()) uniqueQueueFamilies.emplace(indices.graphicsComputeFamily.value());
-    if (indices.computeFamily.has_value()) uniqueQueueFamilies.emplace(indices.computeFamily.value());
-    if (indices.presentFamily.has_value()) uniqueQueueFamilies.emplace(indices.presentFamily.value());
+    std::vector<uint32_t> uniqueQueueFamilies;  // Use vector instead of unordered_set because it's so small
+    if (indices.graphicsComputeFamily.has_value()) addUniqueIndex(uniqueQueueFamilies, indices.graphicsComputeFamily.value());
+    if (indices.computeFamily.has_value()) addUniqueIndex(uniqueQueueFamilies, indices.computeFamily.value());
+    if (indices.presentFamily.has_value()) addUniqueIndex(uniqueQueueFamilies, indices.presentFamily.value());
     float queuePriorities[1] = {1.0f};
     for (uint32_t queueFamily : uniqueQueueFamilies) {
         VkDeviceQueueCreateInfo queueCreateInfo{};

@@ -1,6 +1,6 @@
 #include "../lepton2/graphics2d/Entity2d.h"
+#include "../lepton2/graphics2d/Text2d.h"
 #include "../lepton2/graphics2d/TextFont.h"
-#include "../lepton2/graphics2d/Polygon2d.h"
 #include "../lepton2/vulkancore/VulkanLoop.h"
 
 using namespace lepton2::vulkancore;
@@ -29,7 +29,8 @@ int demo_simple_text2d(int argc, char** argv) {
     VulkanContext* ctx = new VulkanContext(argv[0], false, false, appInfo, window);
 #endif
 
-    ctx->swapchain.setPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR);  // Just for debugging to avoid limiting framerate
+    // ctx->swapchain.setPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR);  // Just for debugging to avoid limiting framerate
+    ctx->swapchain.setSurfaceFormat({VK_FORMAT_B8G8R8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR});
     ctx->swapchain.buildSwapchain(ctx);
 
     TerminatingSubpassConfig termConfig = ctx->swapchain.getDefaultPresentConfig();
@@ -68,16 +69,41 @@ int demo_simple_text2d(int argc, char** argv) {
     // topFrame->addChild(rect);
 
     TextFont* font = new TextFont(ctx, "demos/UbuntuMono.ttf");
-    ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('A'));
-    printf("Advance width %fem\n", glyph->advanceWidth);
+    // ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('G'));
+    // printf("Advance width %fem\n", glyph->advanceWidth);
     store->addLinkedResource(font, true);
 
-    Polygon2d* poly = new Polygon2d(ctx, "demos/simple_text2d/rectangle", 0, glyph->coords);
-    poly->initialize(ctx, renderPass, node, store);
-    poly->region = {{0.f, 0.f}, {1.0f, 1.0f}, 0.f};
-    poly->setAspectControlMode(ASPECT_CONTROL_FIT_MIN_DIM_2D);
-    topFrame->addLinkedResource(poly, true);
-    topFrame->addChild(poly);
+    // TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
+    // glyph2d->initialize(ctx, renderPass, node, store);
+    // glyph2d->region = {{-0.5f, -0.5f}, {2.5f, 2.5f}, 0.f};
+    // glyph2d->setAspectControlMode(ASPECT_CONTROL_FIT_MIN_DIM_2D);
+    // topFrame->addLinkedResource(glyph2d, true);
+    // topFrame->addChild(glyph2d);
+
+    {
+        Text2d* text2d = new Text2d(ctx, "demos/simple_text2d/rectangle", font);
+        text2d->initialize(ctx, renderPass, node, store);
+        text2d->region = {{-1.f, 0.f}, {0.2f, 0.2f}, 0.f};
+        text2d->setAspectControlMode(ASPECT_CONTROL_FIT_HEIGHT_2D);
+        text2d->setHorizontalAlignment(ALIGN_HORIZ_LEFT_2D);
+        topFrame->addLinkedResource(text2d, true);
+        topFrame->addChild(text2d);
+
+        text2d->setString(ctx, "I have spent weeks on rendering this text.");
+    }
+
+    {
+        Text2d* text2d = new Text2d(ctx, "demos/simple_text2d/rectangle", font);
+        text2d->wireframe = true;
+        text2d->initialize(ctx, renderPass, node, store);
+        text2d->region = {{-1.f, 0.4f}, {0.2f, 0.2f}, 0.f};
+        text2d->setAspectControlMode(ASPECT_CONTROL_FIT_HEIGHT_2D);
+        text2d->setHorizontalAlignment(ALIGN_HORIZ_LEFT_2D);
+        topFrame->addLinkedResource(text2d, true);
+        topFrame->addChild(text2d);
+
+        text2d->setString(ctx, "I am beginning to think it was not worth it.");
+    }
 
     VulkanLoopModifier* logicmod = new Logic2DLoopModifier(topFrame);
     mainLoop.loopModifiers.push_back(logicmod);
