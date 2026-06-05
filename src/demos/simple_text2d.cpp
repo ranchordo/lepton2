@@ -69,11 +69,12 @@ int demo_simple_text2d(int argc, char** argv) {
     // topFrame->addChild(rect);
 
     TextFont* font = new TextFont(ctx, "demos/UbuntuMono.ttf");
-    // ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('G'));
-    // printf("Advance width %fem\n", glyph->advanceWidth);
+    ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('O'));
+    printf("Advance width %fem\n", glyph->advanceWidth);
     store->addLinkedResource(font, true);
 
-    // TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
+    TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
+    // // glyph2d->wireframe = true;
     // glyph2d->initialize(ctx, renderPass, node, store);
     // glyph2d->region = {{-0.5f, -0.5f}, {2.5f, 2.5f}, 0.f};
     // glyph2d->setAspectControlMode(ASPECT_CONTROL_FIT_MIN_DIM_2D);
@@ -89,12 +90,12 @@ int demo_simple_text2d(int argc, char** argv) {
         topFrame->addLinkedResource(text2d, true);
         topFrame->addChild(text2d);
 
-        text2d->setString(ctx, "I have spent weeks on rendering this text.");
+        text2d->setString(ctx, "ABCDEFGHIJKLMNOPQRSTVUWXYZ");
+        // text2d->setString(ctx, "abcdefghijklmnopqrstuvwxyz");
     }
 
     {
         Text2d* text2d = new Text2d(ctx, "demos/simple_text2d/rectangle", font);
-        text2d->wireframe = true;
         text2d->initialize(ctx, renderPass, node, store);
         text2d->region = {{-1.f, 0.4f}, {0.2f, 0.2f}, 0.f};
         text2d->setAspectControlMode(ASPECT_CONTROL_FIT_HEIGHT_2D);
@@ -102,7 +103,8 @@ int demo_simple_text2d(int argc, char** argv) {
         topFrame->addLinkedResource(text2d, true);
         topFrame->addChild(text2d);
 
-        text2d->setString(ctx, "I am beginning to think it was not worth it.");
+        // text2d->setString(ctx, "ABCDEFGHIJKLMNOPQRSTVUWXYZ");
+        text2d->setString(ctx, "abcdefghijklmnopqrstuvwxyz");
     }
 
     VulkanLoopModifier* logicmod = new Logic2DLoopModifier(topFrame);

@@ -517,7 +517,7 @@ static void repairTriangleTexcoord(std::vector<SimpleVertex2d>& points, Triangle
 }
 
 // Use Bowyer-Watson algorithm to build Delaunay triangulation
-static float triangulate(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris) {
+static void triangulate(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris) {
     // Bounding triangle
     glm::vec2 bbox_min = glm::vec2(1.f / 0.f);
     glm::vec2 bbox_max = glm::vec2(-1.f / 0.f);
@@ -567,8 +567,6 @@ static float triangulate(std::vector<SimpleVertex2d>& points, std::vector<Triang
         }
         badtris.clear();
     }
-
-    return bbox_max.x;  // For triangle filtering later
 }
 
 static void addUniqueIndex(std::vector<uint32_t>& vec, uint32_t idx) {
@@ -610,7 +608,7 @@ void fillMonotone(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tr
     }
 }
 
-// Cut across the Delaunay triangulation to enforce polygon edges
+// Cut across a triangulation to enforce polygon edges
 static void cutEdge(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, uint32_t f0, uint32_t f1) {
     std::vector<uint32_t> chain1;  // While asymptotically faster, std::unordered_set would
     std::vector<uint32_t> chain2;  // introduce unnecessary overhead for sets this small
@@ -650,6 +648,28 @@ static inline uint32_t getNextPoint(std::vector<uint32_t>& contours, uint32_t cn
 
 static inline uint32_t getPrevPoint(std::vector<uint32_t>& contours, uint32_t cnt, uint32_t pt) {
     return (pt > ((cnt == 0) ? 0 : (contours[cnt - 1] + 1))) ? (pt - 1) : contours[cnt];
+}
+
+static inline uint8_t getQuadrant(glm::vec2 p) {
+    return (p.x > 0) ? ((p.y > 0) ? 1 : 4) : ((p.y > 0) ? 2 : 3);
+}
+
+static inline bool pointInPolygon(std::vector<std::pair<glm::vec2, glm::vec2>> edges, glm::vec2 point) {
+    int8_t winding = 0;
+    for (std::pair<glm::vec2, glm::vec2> edge : edges) {
+        glm::vec2 e1 = edge.first - point;
+        glm::vec2 e2 = edge.second - point;
+        uint8_t q1 = getQuadrant(e1);
+        uint8_t q2 = getQuadrant(e2);
+        int8_t qd = (int8_t)(((q2 - q1) + 5) & 3) - 1;
+        if (qd != 2) {
+            winding += qd;
+            continue;
+        }
+        float xint = cross2d(e1, e2) / (e2.y - e1.y);
+        winding += ((q1 < q2) != (xint > 0)) ? 2 : -2;
+    }
+    return (winding != 0);
 }
 
 TextFont::TextFont(VulkanContext* ctx, const char* ttf) {
@@ -726,7 +746,7 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
 #endif
 
     std::vector<Triangle> tris;
-    float bbox_max_x = triangulate(coords, tris);
+    triangulate(coords, tris);
 
 #ifdef GLYPH_LOAD_PROFILING
     printf("Built %u Delaunay triangles at %lf seconds\n", tris.size(), lepton2::utils::getElapsedSeconds(start_time));
@@ -738,7 +758,11 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
         for (uint32_t t = cstart; t < endIndices[cnt] + 1; t++) {
             uint32_t next = getNextPoint(endIndices, cnt, t);
             cutEdge(coords, tris, t, next);
-            if (!onCurve[next]) cutEdge(coords, tris, t, getNextPoint(endIndices, cnt, next));
+            // printf("Cut %u->%u (1)\n", t, next);
+            if (!onCurve[next]) {
+                // printf("Cut %u->%u (2)\n", t, getNextPoint(endIndices, cnt, next));
+                cutEdge(coords, tris, t, getNextPoint(endIndices, cnt, next));
+            }
         }
         cstart = endIndices[cnt] + 1;
     }
@@ -769,12 +793,7 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
             prevIdx = t;
         }
         prevIdx = UINT32_MAX, firstIdx = UINT32_MAX;
-        for (uint32_t t = cstart; t != firstIdx; t = getNextPoint(endIndices, cnt, t)) {
-            if (onCurve[t]) {
-                if (!onCurve[getNextPoint(endIndices, cnt, t)] && !onCurve[getPrevPoint(endIndices, cnt, t)]) {
-                    continue;
-                }
-            }
+        for (uint32_t t = cstart; t != firstIdx; t = getNextPoint(endIndices, cnt, t)) {  // FIXME: just all edges
             if (prevIdx != UINT32_MAX) {
                 if (firstIdx == UINT32_MAX) firstIdx = t;
                 edgesSet2.push_back({coords[t].pos2d, coords[prevIdx].pos2d});
@@ -793,22 +812,8 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
             continue;
         }
         glm::vec2 p1 = (coords[tri->t[0]].pos2d + coords[tri->t[1]].pos2d + coords[tri->t[2]].pos2d) / 3.f;
-        glm::vec2 p2 = glm::vec2(bbox_max_x, p1.y);
-        p1 += glm::vec2(0.f, 1e-4f);
-
-        uint32_t intersections1 = 0;
-        uint32_t intersections2 = 0;
-
-        for (std::pair<glm::vec2, glm::vec2> e : edgesSet1) {
-            if (intersectionTest(p1, p2, e.first, e.second, 0.f)) intersections1++;
-        }
-
-        for (std::pair<glm::vec2, glm::vec2> e : edgesSet2) {
-            if (intersectionTest(p1, p2, e.first, e.second, 0.f)) intersections2++;
-        }
-
-        if ((intersections1 & 1) > 0) triangleFlags[i] |= 1;
-        if ((intersections2 & 1) > 0) triangleFlags[i] |= 2;
+        if (pointInPolygon(edgesSet1, p1)) triangleFlags[i] |= 1;
+        if (pointInPolygon(edgesSet2, p1)) triangleFlags[i] |= 2;
     }
 
 #ifdef GLYPH_LOAD_PROFILING
@@ -816,7 +821,7 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
 #endif
 
     for (uint32_t i = tris.size() - 1; i < tris.size(); i--) {
-        if (triangleFlags[i] == 0) {
+        if ((3 & triangleFlags[i]) == 0) {
             tris[i] = tris[tris.size() - 1];
             triangleFlags[i] = triangleFlags[tris.size() - 1];
             tris.pop_back();
