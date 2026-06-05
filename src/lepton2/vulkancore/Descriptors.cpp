@@ -272,9 +272,7 @@ void DescriptorPool::destroy_back(VulkanContext* ctx) {
 
 void DescriptorSetLayoutInfo::addNewBinding(DescriptorInfo descriptorInfo, uint32_t num) {
     uint32_t uint_type = (uint32_t)descriptorInfo.descriptorType;
-    if (this->typeCounts.count(uint_type) == 0) {
-        this->typeCounts[uint_type] = 0;
-    }
+    this->typeCounts.insert(std::make_pair(uint_type, (uint32_t)0));
     this->typeCounts[uint_type] += num;
     for (uint32_t i = 0; i < num; i++) {
         VkDescriptorSetLayoutBinding binding{};

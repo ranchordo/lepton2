@@ -70,21 +70,18 @@ MemoryChonklet VulkanAllocationManager::findMemory(VulkanContext* ctx, VkDeviceS
 #endif
     MemoryChonkletEntry* cEntry;
     MemoryChonkus* selectedChonkus;
-    if (chonki.count(memoryTypeIndex) == 0 || chonki[memoryTypeIndex].size() == 0) {
+    auto chonkiInsertion = this->chonki.insert(std::make_pair(memoryTypeIndex, std::vector<MemoryChonkus*>()));
+    if (chonkiInsertion.first->second.size() == 0) {
         VkDeviceSize newSize = getNewSize(size);
-        MemoryChonkus* newChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
+        selectedChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
         printf("Building new chonkus vector with size %d, pointer is %p\n", (int)newSize, newChonkus->memory);
 #endif
-        std::vector<MemoryChonkus*> newChonki = {newChonkus};
-        std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
-        lookup = newChonki;
-        selectedChonkus = newChonkus;
+        chonkiInsertion.first->second.push_back(selectedChonkus);
         cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
     } else {
-        std::vector<MemoryChonkus*>& allChonki = chonki[memoryTypeIndex];
-        for (int32_t i = allChonki.size() - 1; i >= 0; i--) {
-            selectedChonkus = allChonki[i];
+        for (int32_t i = chonkiInsertion.first->second.size() - 1; i >= 0; i--) {
+            selectedChonkus = chonkiInsertion.first->second[i];
             cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
             if (cEntry != nullptr) {
                 for (uint32_t j = 0; j < unusedChonki.size(); j++) {
@@ -98,16 +95,11 @@ MemoryChonklet VulkanAllocationManager::findMemory(VulkanContext* ctx, VkDeviceS
         }
         if (cEntry == nullptr) {
             VkDeviceSize newSize = getNewSize(size);
-            MemoryChonkus* newChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
+            selectedChonkus = this->buildChonkus(ctx, newSize, memoryTypeIndex);
 #ifdef DEBUG_MEMORY_MANAGER
-            printf("Building new chonkus on existing vector with size %d, pointer is %p, ", (int)newSize, newChonkus->memory);
+            printf("Building new chonkus on existing vector with size %d, pointer is %p, chonkus %p\n", (int)newSize, newChonkus->memory, selectedChonkus);
 #endif
-            std::vector<MemoryChonkus*>& lookup = chonki[memoryTypeIndex];
-            lookup.push_back(newChonkus);
-            selectedChonkus = newChonkus;
-#ifdef DEBUG_MEMORY_MANAGER
-            printf("chonkus %p\n", selectedChonkus);
-#endif
+            chonkiInsertion.first->second.push_back(selectedChonkus);
             cEntry = this->findAvailableEntry(selectedChonkus, size, alignment);
         }
     }

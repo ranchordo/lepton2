@@ -135,9 +135,8 @@ void SubpassGCSRenderCallback::preRenderSubpass(VulkanContext* ctx, uint32_t fra
 
 void SubpassGraphicalConfigurationStore::dropConfigurationHandle(VulkanContext* ctx, GraphicalConfigurationHandle handle) {
     CHECK_DESTRUCTION();
-    if (this->cache.count(handle.config->pipeline->creationConstraints.shaderName) == 0) {
-        return;
-    }
+    auto find = this->cache.find(handle.config->pipeline->creationConstraints.shaderName);
+    if (find == this->cache.end()) return;
 
     auto elem = std::find(handle.config->users.begin(), handle.config->users.end(), handle.user);
     if (elem != handle.config->users.end()) {
@@ -145,7 +144,7 @@ void SubpassGraphicalConfigurationStore::dropConfigurationHandle(VulkanContext* 
         handle.config->users.pop_back();
     }
     if (handle.config->users.size() == 0) {
-        std::vector<GraphicalConfiguration*>& configurations = cache[handle.config->pipeline->creationConstraints.shaderName];
+        std::vector<GraphicalConfiguration*>& configurations = find->second;
         auto elem2 = std::find(configurations.begin(), configurations.end(), handle.config);
         if (elem2 != configurations.end()) {
             std::iter_swap(elem2, configurations.end() - 1);

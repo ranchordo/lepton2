@@ -69,11 +69,11 @@ int demo_simple_text2d(int argc, char** argv) {
     // topFrame->addChild(rect);
 
     TextFont* font = new TextFont(ctx, "demos/UbuntuMono.ttf");
-    ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('O'));
-    printf("Advance width %fem\n", glyph->advanceWidth);
     store->addLinkedResource(font, true);
 
-    TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
+    // ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('C'));
+    // printf("Advance width %fem\n", glyph->advanceWidth);
+    // TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
     // // glyph2d->wireframe = true;
     // glyph2d->initialize(ctx, renderPass, node, store);
     // glyph2d->region = {{-0.5f, -0.5f}, {2.5f, 2.5f}, 0.f};
@@ -91,7 +91,6 @@ int demo_simple_text2d(int argc, char** argv) {
         topFrame->addChild(text2d);
 
         text2d->setString(ctx, "ABCDEFGHIJKLMNOPQRSTVUWXYZ");
-        // text2d->setString(ctx, "abcdefghijklmnopqrstuvwxyz");
     }
 
     {
@@ -103,7 +102,6 @@ int demo_simple_text2d(int argc, char** argv) {
         topFrame->addLinkedResource(text2d, true);
         topFrame->addChild(text2d);
 
-        // text2d->setString(ctx, "ABCDEFGHIJKLMNOPQRSTVUWXYZ");
         text2d->setString(ctx, "abcdefghijklmnopqrstuvwxyz");
     }
 

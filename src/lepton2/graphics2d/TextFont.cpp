@@ -449,6 +449,7 @@ struct Triangle {
     uint32_t t[3];
     glm::vec2 cc;
     float cr;
+    uint8_t respectedEdges = 0;
 };
 
 static inline constexpr float cross2d(glm::vec2 v1, glm::vec2 v2) {
@@ -485,9 +486,17 @@ static void pushTriangle(std::vector<SimpleVertex2d>& points, std::vector<Triang
     tris.push_back(tri);
 }
 
-static inline constexpr bool triangleContainsEdge(Triangle& tri, uint32_t e0, uint32_t e1) {
-    if (tri.t[0] != e0 && tri.t[1] != e0 && tri.t[2] != e0) return false;
-    return (tri.t[0] == e1 || tri.t[1] == e1 || tri.t[2] == e1);
+static inline constexpr uint8_t triangleContainsEdge(Triangle& tri, uint32_t e0, uint32_t e1) {
+    // Assumes the triangle does not contain a single point more than once
+    if (tri.t[0] == e0 || tri.t[0] == e1) {
+        if (tri.t[1] == e0 || tri.t[1] == e1) return 0;
+        if (tri.t[2] == e0 || tri.t[2] == e1) return 2;
+    } else {
+        if (tri.t[1] == e0 || tri.t[1] == e1) {
+            if (tri.t[2] == e0 || tri.t[2] == e1) return 1;
+        }
+    }
+    return UINT8_MAX;
 }
 
 static uint8_t findTriangleTexcoord(std::vector<SimpleVertex2d>& points, Triangle* tri, glm::vec2 target) {
@@ -507,7 +516,9 @@ static void repairTriangleTexcoord(std::vector<SimpleVertex2d>& points, Triangle
     uint8_t idx0 = findTriangleTexcoord(points, tri, targets[0]);
     uint8_t idx1 = findTriangleTexcoord(points, tri, targets[1]);
     uint8_t idx2 = findTriangleTexcoord(points, tri, targets[2]);
-    if ((idx0 == 255 ? 1 : 0) + (idx1 == 255 ? 1 : 0) + (idx2 == 255 ? 1 : 0) > 1) {
+    uint8_t borked = (idx0 == 255 ? 1 : 0) + (idx1 == 255 ? 1 : 0) + (idx2 == 255 ? 1 : 0);
+    if (borked == 0) return;
+    if (borked > 1) {
         printf("Warning: Failed to repair triangle texture coordinate data - possible texcoord heuristic failure.\n");
         return;
     }
@@ -555,7 +566,7 @@ static void triangulate(std::vector<SimpleVertex2d>& points, std::vector<Triangl
                 bool edgeNotShared = true;
                 for (uint32_t tridx2 = 0; tridx2 < badtris.size(); tridx2++) {
                     if (tridx2 == tridx) continue;
-                    if (triangleContainsEdge(badtris[tridx2], e0[i], e1[i])) {
+                    if (triangleContainsEdge(badtris[tridx2], e0[i], e1[i]) != UINT8_MAX) {
                         edgeNotShared = false;
                         break;
                     }
@@ -608,31 +619,51 @@ void fillMonotone(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tr
     }
 }
 
+struct RespectedEdgeInfo {
+    uint32_t tridx;
+    uint8_t edgeIdx;
+    uint32_t f0;
+    uint32_t f1;
+};
+
 // Cut across a triangulation to enforce polygon edges
-static void cutEdge(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, uint32_t f0, uint32_t f1) {
+static void cutEdge(std::vector<SimpleVertex2d>& points, std::vector<Triangle>& tris, uint32_t f0, uint32_t f1, std::vector<RespectedEdgeInfo>& respEdges) {
     std::vector<uint32_t> chain1;  // While asymptotically faster, std::unordered_set would
     std::vector<uint32_t> chain2;  // introduce unnecessary overhead for sets this small
     chain1.push_back(f0);
     chain2.push_back(f0);
     glm::vec2 q1 = points[f0].pos2d, q2 = points[f1].pos2d;
     MonotoneIndexComparator comp(&points, q1, q2);
+    std::vector<uint32_t> badIndices;
     for (uint32_t tridx = tris.size() - 1; tridx < tris.size(); tridx--) {
         Triangle* tri = &tris[tridx];
+        uint8_t edgeContainment = triangleContainsEdge(*tri, f0, f1);
+        if (edgeContainment != UINT8_MAX) {
+            tri->respectedEdges |= (1 << edgeContainment);
+            continue;
+        }
         const uint32_t* e0 = tri->t;
         const uint32_t e1[3] = {e0[1], e0[2], e0[0]};
         for (uint8_t i = 0; i < 3; i++) {
             glm::vec2 p1 = points[e0[i]].pos2d, p2 = points[e1[i]].pos2d;
             if (intersectionTest(p1, p2, q1, q2, 1e-4)) {
+                if ((tri->respectedEdges & (1 << i)) > 0) {
+                    respEdges.push_back({tridx, i, f0, f1});
+                }
                 for (uint8_t j = 0; j < 3; j++) {
+                    if (e0[j] == f1) continue;
                     float c2d = cross2d(points[e0[j]].pos2d - q1, q2 - q1);
                     if (c2d < -1e-6) addUniqueIndex(chain1, e0[j]);
                     if (c2d > 1e-6) addUniqueIndex(chain2, e0[j]);
                 }
-                tris[tridx] = tris[tris.size() - 1];
-                tris.pop_back();
+                badIndices.push_back(tridx);
                 break;
             }
         }
+    }
+    for (uint32_t badIdx : badIndices) {
+        tris[badIdx] = tris[tris.size() - 1];
+        tris.pop_back();
     }
     std::sort(chain1.begin() + 1, chain1.end(), comp);
     std::sort(chain2.begin() + 1, chain2.end(), comp);
@@ -687,8 +718,10 @@ bool TextFont::containsGlyph(uint32_t codepoint) {
 // #define GLYPH_LOAD_PROFILING
 
 ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
-    if (glyphMap.count(codepoint) > 0) {
-        return glyphMap[codepoint];  // I'm so dynamic
+    printf("Load codepoint %c\n", (char)codepoint);
+    auto insertion = glyphMap.insert(std::make_pair(codepoint, (ProcessedGlyph*)nullptr));
+    if (!insertion.second) {
+        return insertion.first->second;
     }
 
 #ifdef GLYPH_LOAD_PROFILING
@@ -753,15 +786,16 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
 #endif
 
     uint32_t cstart = 0;
+    std::vector<RespectedEdgeInfo> respEdges;
     // Definitely the step which should be optimized using quadtree location techniques
     for (uint32_t cnt = 0; cnt < endIndices.size(); cnt++) {
         for (uint32_t t = cstart; t < endIndices[cnt] + 1; t++) {
             uint32_t next = getNextPoint(endIndices, cnt, t);
-            cutEdge(coords, tris, t, next);
+            cutEdge(coords, tris, t, next, respEdges);
             // printf("Cut %u->%u (1)\n", t, next);
             if (!onCurve[next]) {
                 // printf("Cut %u->%u (2)\n", t, getNextPoint(endIndices, cnt, next));
-                cutEdge(coords, tris, t, getNextPoint(endIndices, cnt, next));
+                cutEdge(coords, tris, t, getNextPoint(endIndices, cnt, next), respEdges);
             }
         }
         cstart = endIndices[cnt] + 1;
@@ -919,7 +953,7 @@ ProcessedGlyph* TextFont::getGlyph(VulkanContext* ctx, uint32_t codepoint) {
 
     glyph->objData = data;
 
-    glyphMap[codepoint] = glyph;
+    insertion.first->second = glyph;
     return glyph;
 }
 
