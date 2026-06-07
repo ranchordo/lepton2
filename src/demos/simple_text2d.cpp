@@ -14,7 +14,7 @@ int demo_simple_text2d(int argc, char** argv) {
     }
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Lepton2: demo_simple_subpasses", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Lepton2: demo_simple_text2d", nullptr, nullptr);
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pNext = nullptr;
@@ -59,50 +59,19 @@ int demo_simple_text2d(int argc, char** argv) {
     topFrame->initialize(ctx, renderPass, node, store);
     renderPass->addLinkedResource(topFrame, true);
 
-    // Rectangle2d* rect = new Rectangle2d(ctx, "demos/simple_text2d/rectangle", 0, nullptr);
-    // rect->initialize(ctx, renderPass, node, store);
-    // rect->region = {{0.f, 0.f}, {1.0f, 1.0f}, 0.f};
-    // rect->setAspectControlMode(ASPECT_CONTROL_FIT_MIN_DIM_2D);
-    // rect->setHorizontalAlignment(ALIGN_HORIZ_RIGHT_2D);
-    // rect->setVerticalAlignment(ALIGN_VERT_BOTTOM_2D);
-    // topFrame->addLinkedResource(rect, true);
-    // topFrame->addChild(rect);
-
-    TextFont* font = new TextFont(ctx, "demos/UbuntuMono.ttf");
+    TextFont* font = new TextFont(ctx, "demos/FreeSerif.ttf");
     store->addLinkedResource(font, true);
 
-    // ProcessedGlyph* glyph = font->getGlyph(ctx, (uint32_t)('C'));
-    // printf("Advance width %fem\n", glyph->advanceWidth);
-    // TextGlyph2d* glyph2d = new TextGlyph2d(ctx, "demos/simple_text2d/rectangle", glyph);
-    // // glyph2d->wireframe = true;
-    // glyph2d->initialize(ctx, renderPass, node, store);
-    // glyph2d->region = {{-0.5f, -0.5f}, {2.5f, 2.5f}, 0.f};
-    // glyph2d->setAspectControlMode(ASPECT_CONTROL_FIT_MIN_DIM_2D);
-    // topFrame->addLinkedResource(glyph2d, true);
-    // topFrame->addChild(glyph2d);
-
     {
         Text2d* text2d = new Text2d(ctx, "demos/simple_text2d/rectangle", font);
         text2d->initialize(ctx, renderPass, node, store);
-        text2d->region = {{-1.f, 0.f}, {0.2f, 0.2f}, 0.f};
+        text2d->region = {{-0.8f, 0.f}, {0.2f, 0.2f}, 0.f};
         text2d->setAspectControlMode(ASPECT_CONTROL_FIT_HEIGHT_2D);
         text2d->setHorizontalAlignment(ALIGN_HORIZ_LEFT_2D);
         topFrame->addLinkedResource(text2d, true);
         topFrame->addChild(text2d);
 
-        text2d->setString(ctx, "ABCDEFGHIJKLMNOPQRSTVUWXYZ");
-    }
-
-    {
-        Text2d* text2d = new Text2d(ctx, "demos/simple_text2d/rectangle", font);
-        text2d->initialize(ctx, renderPass, node, store);
-        text2d->region = {{-1.f, 0.4f}, {0.2f, 0.2f}, 0.f};
-        text2d->setAspectControlMode(ASPECT_CONTROL_FIT_HEIGHT_2D);
-        text2d->setHorizontalAlignment(ALIGN_HORIZ_LEFT_2D);
-        topFrame->addLinkedResource(text2d, true);
-        topFrame->addChild(text2d);
-
-        text2d->setString(ctx, "abcdefghijklmnopqrstuvwxyz");
+        text2d->setString(ctx, "$ξ = \\begin{pmatrix}e^{iϕ} & 0\\end{pmatrix}^\\top$");
     }
 
     VulkanLoopModifier* logicmod = new Logic2DLoopModifier(topFrame);

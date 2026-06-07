@@ -1,17 +1,28 @@
 #include "Text2d.h"
 
+#include <wchar.h>
+
 using namespace lepton2::graphics;
 using namespace lepton2::graphics2d;
 using namespace lepton2::vulkancore;
 
-// FIXME: Stop using ASCII and deal with UTF-8 properly
+static inline uint32_t parseNextByte(const char** str) {
+    uint8_t c = (uint8_t)(*((*str)++));
+    assert((0xc0 & c) == 0x80);
+    return (uint32_t)(c & 0x3f);
+}
+
 static uint32_t parseCodepoint(const char** str) {
-    uint32_t c = (uint32_t)(**str);
-    (*str)++;
-    if (c > 127) {
-        throw std::runtime_error("Implement UTF-8 you dumbhead");
+    uint8_t c = (uint8_t)(*((*str)++));
+    if (c <= 0x7f) return (uint32_t)c;
+    if ((0xe0 & c) == 0xc0) {
+        return ((0x1f & c) << 6) | parseNextByte(str);
+    } else if ((0xf0 & c) == 0xe0) {
+        return ((0x0f & c) << 12) | (parseNextByte(str) << 6) | parseNextByte(str);
+    } else if ((0xf8 & c) == 0xf0) {
+        return ((0x07 & c) << 18) | (parseNextByte(str) << 12) | (parseNextByte(str) << 6) | parseNextByte(str);
     }
-    return c;
+    throw std::runtime_error("Invalid UTF-8");
 }
 
 TextGlyph2d* Text2d::getInactiveGlyph(VulkanContext* ctx, uint32_t codepoint, ProcessedGlyph** pgptr) {
@@ -19,7 +30,10 @@ TextGlyph2d* Text2d::getInactiveGlyph(VulkanContext* ctx, uint32_t codepoint, Pr
     std::vector<TextGlyph2d*>& vec = insertion.first->second;
     TextGlyph2d* result = nullptr;
     for (uint32_t i = 0; i < vec.size(); i++) {
-        if (vec[i] == nullptr) return nullptr;
+        if (vec[i] == nullptr) {
+            (*pgptr) = font->getGlyph(ctx, codepoint);
+            return nullptr;
+        }
         if (!vec[i]->isActive()) {
             result = vec[i];
             break;
@@ -52,19 +66,20 @@ void Text2d::setString(VulkanContext* ctx, const char* string) {
         uint32_t codepoint = parseCodepoint(&string);
         ProcessedGlyph* pg;
         TextGlyph2d* newGlyph = this->getInactiveGlyph(ctx, codepoint, &pg);
-        xpos += 2.f * pg->advanceWidth;
         if (newGlyph != nullptr) {
             this->addChild(newGlyph);
             glyphs.push_back(newGlyph);
             newGlyph->setActive(true);
             newGlyph->region = {{xpos, -0.5f}, {2.0f, 2.0f}, 0.f};
         }
+        xpos += 2.f * pg->advanceWidth;
     }
 }
 
 void Text2d::destroy_back(VulkanContext* ctx) {
     for (std::pair<uint32_t, std::vector<TextGlyph2d*>> entry : glyphPool) {
         for (TextGlyph2d* glyph : entry.second) {
+            if (glyph == nullptr) continue;
             glyph->destroy(ctx);
             delete glyph;  // Yes, I could have used addLinkedResource, and no, I didn't.
         }
