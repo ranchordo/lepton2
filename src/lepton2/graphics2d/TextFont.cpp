@@ -174,7 +174,6 @@ static void addVertexLink(LinkedBoundaryVertex* vert, uint32_t idx) {
 }
 
 static uint32_t sortBoundaryChain(std::vector<LinkedBoundaryVertex>& chain, uint32_t start) {
-    assert(start < chain.size());
     uint32_t prevIdx = UINT32_MAX;
     uint32_t idx = start;
     uint32_t count = 0;
@@ -184,13 +183,13 @@ static uint32_t sortBoundaryChain(std::vector<LinkedBoundaryVertex>& chain, uint
             throw std::runtime_error("TTF edge cut phase: cycle detected during boundary chain sorting.");
         }
         if (prevIdx == UINT32_MAX) {
-            assert(chain[idx].idx2 == UINT32_MAX);
-            assert(chain[idx].idx1 != UINT32_MAX);
+            if (chain[idx].idx2 != UINT32_MAX) return UINT32_MAX;
+            if (chain[idx].idx1 == UINT32_MAX) return UINT32_MAX;
             prevIdx = idx;
             idx = chain[idx].idx1;
             continue;
         }
-        assert(chain[idx].idx1 != UINT32_MAX);
+        if (chain[idx].idx1 == UINT32_MAX) return UINT32_MAX;
         if (chain[idx].idx1 != prevIdx) {
             prevIdx = idx;
             idx = chain[idx].idx1;
@@ -546,7 +545,7 @@ ProcessedGlyph* TextFont::getGlyphByIndex(VulkanContext* ctx, uint32_t glyphInde
     printf("Built %u Delaunay triangles at %lf seconds\n", tris.size(), lepton2::utils::getElapsedSeconds(start_time));
 #endif
 
-    cstart = 0;
+cstart = 0;
     // Definitely the step which should be optimized using quadtree location techniques
     for (uint32_t cnt = 0; cnt < endIndices.size(); cnt++) {
         for (uint32_t t = cstart; t < endIndices[cnt] + 1; t++) {
